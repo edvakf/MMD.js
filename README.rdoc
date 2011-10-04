@@ -1,0 +1,5 @@
+= MMDGL
+
+MikuMikuDance clone on JavaScript and WebGL.
+
+It's still very early stage of development. I'm aiming to run VMD motion with physics.
