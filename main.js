@@ -201,52 +201,66 @@ MMDGL.prototype.redraw = function redraw() {
 
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.ibuffer);
 
-  this.model.materials.reduce(function(offset, material, i) {
-    gl.uniform3fv(program.uAmbientColor, material.ambient);
-    gl.uniform3fv(program.uSpecularColor, material.specular);
-    gl.uniform3fv(program.uDiffuseColor, material.diffuse);
-    gl.uniform1f(program.uAlpha, material.alpha);
-    gl.uniform1f(program.uShininess, material.shininess);
-    gl.uniform1i(program.uEdge, false);
+  this.model.materials.reduce(function(offset, material) {
+    this.renderMaterial(material, offset);
+    this.renderEdge(material, offset);
 
-    var textures = material.textures;
-
-    gl.activeTexture(gl.TEXTURE0); // 0 -> toon
-    gl.bindTexture(gl.TEXTURE_2D, textures.toon);
-    gl.uniform1i(program.uToon, 0);
-
-    if (textures.regular) {
-      gl.activeTexture(gl.TEXTURE1); // 1 -> regular texture
-      gl.bindTexture(gl.TEXTURE_2D, textures.regular);
-      gl.uniform1i(program.uTexture, 1);
-    }
-    gl.uniform1i(program.uUseTexture, !!textures.regular);
-
-    if (textures.sph || textures.spa) {
-      gl.activeTexture(gl.TEXTURE2); // 2 -> sphere map texture
-      gl.bindTexture(gl.TEXTURE_2D, textures.sph || textures.spa);
-      gl.uniform1i(program.uSphereMap, 2);
-      gl.uniform1i(program.uUseSphereMap, true);
-      gl.uniform1i(program.uIsSphereMapAdditive, !!textures.spa);
-    } else {
-      gl.uniform1i(program.uUseSphereMap, false);
-    }
-
-    gl.drawElements(gl.TRIANGLES, material.face_vert_count, gl.UNSIGNED_SHORT, offset);
-
-    if (this.drawEdge && material.edge_flag) {
-      gl.uniform1i(program.uEdge, true);
-      gl.enable(gl.CULL_FACE);
-      gl.cullFace(gl.FRONT);
-      gl.drawElements(gl.TRIANGLES, material.face_vert_count, gl.UNSIGNED_SHORT, offset);
-      gl.disable(gl.CULL_FACE);
-    }
-
-    return offset + material.face_vert_count * 2; // offset is in bytes (size of unsigned short = 2)
+    // offset is in bytes (size of unsigned short = 2)
+    return offset + material.face_vert_count * 2;
   }.bind(this), 0);
 
   gl.flush();
-}
+};
+
+MMDGL.prototype.renderMaterial = function renderMaterial(material, offset) {
+  var gl = this.gl;
+  var program = this.program;
+
+  gl.uniform3fv(program.uAmbientColor, material.ambient);
+  gl.uniform3fv(program.uSpecularColor, material.specular);
+  gl.uniform3fv(program.uDiffuseColor, material.diffuse);
+  gl.uniform1f(program.uAlpha, material.alpha);
+  gl.uniform1f(program.uShininess, material.shininess);
+  gl.uniform1i(program.uEdge, false);
+
+  var textures = material.textures;
+
+  gl.activeTexture(gl.TEXTURE0); // 0 -> toon
+  gl.bindTexture(gl.TEXTURE_2D, textures.toon);
+  gl.uniform1i(program.uToon, 0);
+
+  if (textures.regular) {
+    gl.activeTexture(gl.TEXTURE1); // 1 -> regular texture
+    gl.bindTexture(gl.TEXTURE_2D, textures.regular);
+    gl.uniform1i(program.uTexture, 1);
+  }
+  gl.uniform1i(program.uUseTexture, !!textures.regular);
+
+  if (textures.sph || textures.spa) {
+    gl.activeTexture(gl.TEXTURE2); // 2 -> sphere map texture
+    gl.bindTexture(gl.TEXTURE_2D, textures.sph || textures.spa);
+    gl.uniform1i(program.uSphereMap, 2);
+    gl.uniform1i(program.uUseSphereMap, true);
+    gl.uniform1i(program.uIsSphereMapAdditive, !!textures.spa);
+  } else {
+    gl.uniform1i(program.uUseSphereMap, false);
+  }
+
+  gl.drawElements(gl.TRIANGLES, material.face_vert_count, gl.UNSIGNED_SHORT, offset);
+};
+
+MMDGL.prototype.renderEdge = function renderEdge(material, offset) {
+  var gl = this.gl;
+  var program = this.program;
+
+  if (this.drawEdge && material.edge_flag) {
+    gl.uniform1i(program.uEdge, true);
+    gl.enable(gl.CULL_FACE);
+    gl.cullFace(gl.FRONT);
+    gl.drawElements(gl.TRIANGLES, material.face_vert_count, gl.UNSIGNED_SHORT, offset);
+    gl.disable(gl.CULL_FACE);
+  }
+};
 
 MMDGL.prototype.bindConstants = function bindConstants() {
   var gl = this.gl;
@@ -285,7 +299,7 @@ MMDGL.prototype.bindConstants = function bindConstants() {
   gl.uniformMatrix4fv(program.uNMatrix, false, nMatrix);
 
   // direction of light source defined in world space, then transformed to view space
-  var lightDirection = vec3.create(this.lightSource); // world space
+  var lightDirection = vec3.create(this.lightDirection); // world space
   vec3.normalize(lightDirection);
   mat4.multiplyVec3(nMatrix, lightDirection); // view space
   vec3.normalize(lightDirection);
@@ -332,7 +346,8 @@ MMDGL.prototype.initParameters = function initParameters() {
   this.edgeColor = [0, 0, 0];
 
   // light
-  this.lightSource = [0.5, 1.0, 0.5];
+  this.lightDirection = [0.5, 1.0, 0.5];
+  this.lightDistance = 8875;
   this.lightColor = [154, 154, 154];
 };
 
