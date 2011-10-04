@@ -36,6 +36,9 @@ function MMDGL(canvas, width, height) {
   this.height = height;
 
   this.textureManager = new MMDGL.TextureManager(this);
+  this.textureManager.onload = function() {
+    this.redrawNext = true;
+  }.bind(this);
 }
 
 MMDGL.prototype.initShaders = function initShaders(vshaderSrc, fshaderSrc) {
@@ -303,26 +306,25 @@ MMDGL.prototype.bindConstants = function bindConstants() {
 };
 
 MMDGL.prototype.registerKeyListener = function registerKeyListener() {
-  var that = this;
   document.addEventListener('keydown', function(e) {
     switch(e.keyCode + e.shiftKey * 1000) {
-      case 37: that.roty += Math.PI / 12; break; // left
-      case 39: that.roty -= Math.PI / 12; break; // right
-      case 38: that.rotx = Math.atan(Math.tan(that.rotx) + 1/2); break; // up
-      case 40: that.rotx = Math.atan(Math.tan(that.rotx) - 1/2); break; // down
-      case 33: that.distance -= 3 * that.distance / that.DIST; break; // pageup
-      case 34: that.distance += 3 * that.distance / that.DIST; break; // pagedown
-      //case 35: that.movx -= 3; break; // end
-      case 36: with(that){rotx = roty = movx = movy = 0; distance = DIST;} break; // home
-      case 1037: that.movx += that.distance / that.DIST; break; // left
-      case 1039: that.movx -= that.distance / that.DIST; break; // right
-      case 1038: that.movy -= that.distance / that.DIST; break; // up
-      case 1040: that.movy += that.distance / that.DIST; break; // down
+      case 37: this.roty += Math.PI / 12; break; // left
+      case 39: this.roty -= Math.PI / 12; break; // right
+      case 38: this.rotx = Math.atan(Math.tan(this.rotx) + 1/2); break; // up
+      case 40: this.rotx = Math.atan(Math.tan(this.rotx) - 1/2); break; // down
+      case 33: this.distance -= 3 * this.distance / this.DIST; break; // pageup
+      case 34: this.distance += 3 * this.distance / this.DIST; break; // pagedown
+      //case 35: this.movx -= 3; break; // end
+      case 36: with(this){rotx = roty = movx = movy = 0; distance = DIST;} break; // home
+      case 1037: this.movx += this.distance / this.DIST; break; // left
+      case 1039: this.movx -= this.distance / this.DIST; break; // right
+      case 1038: this.movy -= this.distance / this.DIST; break; // up
+      case 1040: this.movy += this.distance / this.DIST; break; // down
       default: return;
     }
     e.preventDefault();
-    that.redrawNext = true;
-  }, false);
+    this.redrawNext = true;
+  }.bind(this), false);
 };
 
 MMDGL.prototype.initCamera = function initCamera() {
@@ -339,6 +341,7 @@ MMDGL.prototype.initCamera = function initCamera() {
 * textures.get(url);
 */
 MMDGL.TextureManager = function TextureManager(mmdgl) {
+  this.mmdgl = mmdgl;
   this.gl = mmdgl.gl;
   this.store = {};
 };
@@ -385,7 +388,9 @@ MMDGL.TextureManager.prototype.get = function(type, url) {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
     gl.generateMipmap(gl.TEXTURE_2D);
     gl.bindTexture(gl.TEXTURE_2D, null);
-  });
+
+    this.onload && this.onload(img);
+  }.bind(this));
 
   return texture;
 };
