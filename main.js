@@ -16,7 +16,7 @@ window.onload = function() {
       document.getElementById('fshader').textContent);
     mmd.addModel(miku);
     mmd.initBuffers();
-    mmd.initCamera();
+    mmd.initParameters();
     mmd.start();
   });
 };
@@ -234,7 +234,7 @@ MMDGL.prototype.redraw = function redraw() {
 
     gl.drawElements(gl.TRIANGLES, material.face_vert_count, gl.UNSIGNED_SHORT, offset);
 
-    if (material.edge_flag) {
+    if (this.drawEdge && material.edge_flag) {
       gl.uniform1i(program.uEdge, true);
       gl.enable(gl.CULL_FACE);
       gl.cullFace(gl.FRONT);
@@ -243,7 +243,7 @@ MMDGL.prototype.redraw = function redraw() {
     }
 
     return offset + material.face_vert_count * 2; // offset is in bytes (size of unsigned short = 2)
-  }, 0);
+  }.bind(this), 0);
 
   gl.flush();
 }
@@ -252,38 +252,29 @@ MMDGL.prototype.bindConstants = function bindConstants() {
   var gl = this.gl;
   var program = this.program;
 
-  this.edgeThickness = 0.004;
   gl.uniform1f(program.uEdgeThickness, this.edgeThickness);
-  this.edgeColor = [0, 0, 0];
   gl.uniform3fv(program.uEdgeColor, this.edgeColor);
 
   var modelMatrix = mat4.create();
-  mat4.identity(modelMatrix); // model aligned with the world
+  mat4.identity(modelMatrix); // model aligned with the world for now
 
   var rotationMatrix = mat4.create(); // to rotate camera position according to rotx and roty
   mat4.identity(rotationMatrix);
   mat4.rotateY(rotationMatrix, this.roty);
   mat4.rotateX(rotationMatrix, this.rotx);
 
-  var center = vec3.create([this.movx, 10 + this.movy, 0]);
   var cameraPosition = vec3.create(); // camera position in world space
-  mat4.multiplyVec3(rotationMatrix, [0, 0, 1], cameraPosition);
-  vec3.scale(cameraPosition, this.distance);
+  mat4.multiplyVec3(rotationMatrix, [0, 0, this.distance], cameraPosition);
+  var center = vec3.add([this.movx, this.movy, 0], this.initialCenter);
   vec3.add(cameraPosition, center);
 
-  var viewMatrix = mat4.create();
-  mat4.lookAt(
-    cameraPosition,// from this point
-    center, // look at this point
-    [0, 1, 0],  // positive y direction is up
-    viewMatrix);
+  var viewMatrix = mat4.lookAt(cameraPosition, center, [0, 1, 0], viewMatrix);
 
   var mvMatrix = mat4.create();
   mat4.multiply(modelMatrix, viewMatrix, mvMatrix);
   gl.uniformMatrix4fv(program.uMVMatrix, false, mvMatrix);
 
-  var pMatrix = mat4.create();
-  mat4.perspective(40, this.width / this.height, 0.1, 200.0, pMatrix);
+  var pMatrix = mat4.perspective(this.fovy, this.width / this.height, 0.1, 200.0, pMatrix);
   gl.uniformMatrix4fv(program.uPMatrix, false, pMatrix);
 
   // normal matrix; inverse transpose of mvMatrix;
@@ -294,13 +285,13 @@ MMDGL.prototype.bindConstants = function bindConstants() {
   gl.uniformMatrix4fv(program.uNMatrix, false, nMatrix);
 
   // direction of light source defined in world space, then transformed to view space
-  var lightDirection = vec3.create([0.5, 1.0, 0.5]); // world space
+  var lightDirection = vec3.create(this.lightSource); // world space
   vec3.normalize(lightDirection);
   mat4.multiplyVec3(nMatrix, lightDirection); // view space
   vec3.normalize(lightDirection);
   gl.uniform3fv(program.uLightDirection, lightDirection);
 
-  var lightColor = vec3.create([154, 154, 154]);
+  var lightColor = vec3.create(this.lightColor);
   vec3.scale(lightColor, 1 / 255);
   gl.uniform3fv(program.uLightColor, lightColor);
 };
@@ -327,11 +318,22 @@ MMDGL.prototype.registerKeyListener = function registerKeyListener() {
   }.bind(this), false);
 };
 
-MMDGL.prototype.initCamera = function initCamera() {
-  // camera position settings
+MMDGL.prototype.initParameters = function initParameters() {
+  // camera/view settings
   this.rotx = this.roty = 0;
   this.movx = this.movy = 0;
   this.distance = this.DIST = 35;
+  this.initialCenter = [0, 10, 0];
+  this.fovy = 40;
+
+  // edge
+  this.drawEdge = true;
+  this.edgeThickness = 0.004;
+  this.edgeColor = [0, 0, 0];
+
+  // light
+  this.lightSource = [0.5, 1.0, 0.5];
+  this.lightColor = [154, 154, 154];
 };
 
 
