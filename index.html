@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<title>WebGL MMD</title>
+<script type="text/javascript" charset="utf-8" src="libs/glMatrix-0.9.5.min.js"></script>
+<script type="text/javascript" charset="utf-8" src="libs/sjis.js"></script>
+<script type="text/javascript" charset="utf-8" src="libs/mmd/model.js"></script>
+<script type="text/javascript" charset="utf-8" src="main.js"></script>
+<script id="vshader" type="text/x-vertex-shader">
+
+  uniform mat4 uMVMatrix; // model-view matrix (model -> view space)
+  uniform mat4 uPMatrix; // projection matrix (view -> projection space)
+  uniform mat4 uNMatrix; // normal matrix (inverse of transpose of model-view matrix)
+
+  uniform mat4 uLightMatrix; // mvpdMatrix of light space (model -> display space)
+
+  attribute vec3 aVertexPosition;
+  attribute vec3 aVertexNormal;
+  attribute vec2 aTextureCoord;
+  attribute float aVertexEdge; // 0 or 1. 1 if the vertex has an edge. (becuase we can't pass bool to attributes)
+
+  varying vec3 vPosition;
+  varying vec3 vNormal;
+  varying vec2 vTextureCoord;
+  varying vec4 vLightCoord; // coordinate in light space; to be mapped onto shadow map
+
+  uniform float uEdgeThickness;
+  uniform bool uEdge;
+
+  uniform bool uGenerateShadowMap;
+
+  uniform bool uSelfShadow;
+
+  void main() {
+    // return vertex point in projection space
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+
+    if (uGenerateShadowMap) return;
+
+    // for fragment shader
+    vTextureCoord = aTextureCoord;
+    vPosition = (uMVMatrix * vec4(aVertexPosition, 1.0)).xyz;
+    vNormal = (uNMatrix * vec4(aVertexNormal, 1.0)).xyz;
+
+    if (uSelfShadow) {
+      vLightCoord = uLightMatrix * vec4(aVertexPosition, 1.0);
+    }
+
+    if (uEdge) {
+      vec4 pos = gl_Position;
+      vec4 pos2 = uPMatrix * uMVMatrix * vec4(aVertexPosition + aVertexNormal, 1.0);
+      vec4 norm = normalize(pos2 - pos);
+      gl_Position = pos + norm * uEdgeThickness * aVertexEdge * pos.w; // scale by pos.w to prevent becoming thicker when zoomed
+      return;
+    }
+  }
+
+</script>
+<script id="fshader" type="text/x-fragment-shader">
+
+  #ifdef GL_ES
+  precision highp float;
+  #endif
+
+  varying vec2 vTextureCoord;
+  varying vec3 vPosition;
+  varying vec3 vNormal;
+  varying vec4 vLightCoord;
+
+  uniform vec3 uLightDirection; // light source direction in world space
+  uniform vec3 uLightColor;
+
+  uniform vec3 uAmbientColor;
+  uniform vec3 uSpecularColor;
+  uniform vec3 uDiffuseColor;
+  uniform float uAlpha;
+  uniform float uShininess;
+
+  uniform bool uUseTexture;
+  uniform bool uUseSphereMap;
+  uniform bool uIsSphereMapAdditive;
+
+  uniform sampler2D uToon;
+  uniform sampler2D uTexture;
+  uniform sampler2D uSphereMap;
+
+  uniform bool uEdge;
+  uniform float uEdgeThickness;
+  uniform vec3 uEdgeColor;
+
+  uniform bool uGenerateShadowMap;
+  uniform bool uSelfShadow;
+  uniform sampler2D uShadowMap;
+
+  // from http://spidergl.org/example.php?id=6
+  vec4 pack_depth(const in float depth) {
+    const vec4 bit_shift = vec4(256.0*256.0*256.0, 256.0*256.0, 256.0, 1.0);
+    const vec4 bit_mask  = vec4(0.0, 1.0/256.0, 1.0/256.0, 1.0/256.0);
+    vec4 res = fract(depth * bit_shift);
+    res -= res.xxyz * bit_mask;
+    return res;
+  }
+  float unpack_depth(const in vec4 rgba_depth)
+  {
+    const vec4 bit_shift = vec4(1.0/(256.0*256.0*256.0), 1.0/(256.0*256.0), 1.0/256.0, 1.0);
+    float depth = dot(rgba_depth, bit_shift);
+    return depth;
+  }
+
+  void main() {
+    if (uGenerateShadowMap) {
+      gl_FragData[0] = pack_depth(gl_FragCoord.z);
+      return;
+    }
+
+    // vectors are in view space
+    vec3 norm = normalize(vNormal); // each point's normal vector in view space
+    vec3 cameraDirection = normalize(-vPosition); // camera located at origin in view space
+
+    vec3 color;
+
+    //if (uEdge) {
+    if (uEdge || !gl_FrontFacing) {
+
+      color = uEdgeColor;
+
+    } else {
+
+      color = vec3(1.0, 1.0, 1.0);
+      if (uUseTexture) {
+        color *= texture2D(uTexture, vTextureCoord).rgb;
+      }
+      if (uUseSphereMap) {
+        vec2 sphereCoord = 0.5 * (1.0 + vec2(1.0, -1.0) * norm.xy);
+        if (uIsSphereMapAdditive) {
+          color += texture2D(uSphereMap, sphereCoord).rgb;
+        } else {
+          color *= texture2D(uSphereMap, sphereCoord).rgb;
+        }
+      }
+
+      // specular component
+      vec3 halfAngle = normalize(uLightDirection + cameraDirection);
+      float specularWeight = pow( max(0.0, dot(halfAngle, norm)) , uShininess );
+      //float specularWeight = pow( max(0.0, dot(reflect(-uLightDirection, norm), cameraDirection)) , uShininess ); // another definition
+      vec3 specular = specularWeight * uSpecularColor;
+
+      vec2 toonCoord = vec2(0.0, 0.5 * (1.0 - dot( uLightDirection, norm )));
+
+      if (uSelfShadow) {
+        vec3 lightCoord = vLightCoord.xyz / vLightCoord.w * 0.5 + 0.5; // projection to texture coordinate (in light space)
+        vec4 rgbaDepth = texture2D(uShadowMap, lightCoord.xy);
+        float depth = unpack_depth(rgbaDepth);
+        if (depth < lightCoord.z - 0.01) {
+          toonCoord = vec2(0.0, 1.0);
+        }
+      }
+
+      color *= uAmbientColor + uLightColor * (uDiffuseColor + specular);
+
+      color = clamp(color, 0.0, 1.0);
+      color *= texture2D(uToon, toonCoord).rgb;
+
+    }
+    gl_FragColor = vec4(color, uAlpha);
+
+  }
+
+</script>

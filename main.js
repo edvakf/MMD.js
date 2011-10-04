@@ -17,6 +17,7 @@ window.onload = function() {
     mmd.addModel(miku);
     mmd.initBuffers();
     mmd.initParameters();
+    if (mmd.selfShadow)mmd.shadowMap = new MMDGL.ShadowMap(mmd);
     mmd.start();
   });
 };
@@ -190,9 +191,11 @@ MMDGL.prototype.redraw = function redraw() {
   var gl = this.gl;
   var program = this.program;
 
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0, 0, this.width, this.height);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-  this.bindConstants();
+  this.computeMatrices();
 
   this.vbuffers.forEach(function(vb) {
     gl.bindBuffer(gl.ARRAY_BUFFER, vb.buffer);
@@ -200,6 +203,23 @@ MMDGL.prototype.redraw = function redraw() {
   });
 
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.ibuffer);
+
+  if (this.selfShadow) {
+    this.shadowMap.generate();
+
+    gl.activeTexture(gl.TEXTURE3); // 3 -> shadow map
+    gl.bindTexture(gl.TEXTURE_2D, this.shadowMap.getTexture());
+    gl.uniform1i(program.uShadowMap, 3);
+    gl.uniformMatrix4fv(program.uLightMatrix, false, this.shadowMap.lightMatrix);
+    gl.uniform1i(program.uSelfShadow, true);
+
+    // reset
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, this.width, this.height);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  }
+
+  this.setUniforms();
 
   this.model.materials.reduce(function(offset, material) {
     this.renderMaterial(material, offset);
@@ -210,6 +230,56 @@ MMDGL.prototype.redraw = function redraw() {
   }.bind(this), 0);
 
   gl.flush();
+};
+
+MMDGL.prototype.computeMatrices = function computeMatrices() {
+  this.modelMatrix = mat4.create();
+  mat4.identity(this.modelMatrix); // model aligned with the world for now
+
+  var rotationMatrix = mat4.create(); // to rotate camera position according to rotx and roty
+  mat4.identity(rotationMatrix);
+  mat4.rotateY(rotationMatrix, this.roty);
+  mat4.rotateX(rotationMatrix, this.rotx);
+
+  this.cameraPosition = vec3.create(); // camera position in world space
+  mat4.multiplyVec3(rotationMatrix, [0, 0, this.distance], this.cameraPosition);
+  this.center = vec3.add([this.movx, this.movy, 0], this.initialCenter);
+  vec3.add(this.cameraPosition, this.center);
+
+  this.viewMatrix = mat4.lookAt(this.cameraPosition, this.center, [0, 1, 0]);
+
+  this.mvMatrix = mat4.create();
+  mat4.multiply(this.viewMatrix, this.modelMatrix, this.mvMatrix);
+
+  this.pMatrix = mat4.perspective(this.fovy, this.width / this.height, 0.1, 200.0);
+
+  // normal matrix; inverse transpose of mvMatrix;
+  // model -> view space; only applied to directional vectors (not points)
+  this.nMatrix = mat4.create();
+  mat4.inverse(this.mvMatrix, this.nMatrix);
+  mat4.transpose(this.nMatrix);
+};
+
+MMDGL.prototype.setUniforms = function setUniforms() {
+  var gl = this.gl;
+  var program = this.program;
+
+  gl.uniform1f(program.uEdgeThickness, this.edgeThickness);
+  gl.uniform3fv(program.uEdgeColor, this.edgeColor);
+  gl.uniformMatrix4fv(program.uMVMatrix, false, this.mvMatrix);
+  gl.uniformMatrix4fv(program.uPMatrix, false, this.pMatrix);
+  gl.uniformMatrix4fv(program.uNMatrix, false, this.nMatrix);
+
+  // direction of light source defined in world space, then transformed to view space
+  var lightDirection = vec3.create(this.lightDirection); // world space
+  vec3.normalize(lightDirection);
+  mat4.multiplyVec3(this.nMatrix, lightDirection); // view space
+  vec3.normalize(lightDirection);
+  gl.uniform3fv(program.uLightDirection, lightDirection);
+
+  var lightColor = vec3.create(this.lightColor);
+  vec3.scale(lightColor, 1 / 255);
+  gl.uniform3fv(program.uLightColor, lightColor);
 };
 
 MMDGL.prototype.renderMaterial = function renderMaterial(material, offset) {
@@ -262,54 +332,6 @@ MMDGL.prototype.renderEdge = function renderEdge(material, offset) {
   }
 };
 
-MMDGL.prototype.bindConstants = function bindConstants() {
-  var gl = this.gl;
-  var program = this.program;
-
-  gl.uniform1f(program.uEdgeThickness, this.edgeThickness);
-  gl.uniform3fv(program.uEdgeColor, this.edgeColor);
-
-  var modelMatrix = mat4.create();
-  mat4.identity(modelMatrix); // model aligned with the world for now
-
-  var rotationMatrix = mat4.create(); // to rotate camera position according to rotx and roty
-  mat4.identity(rotationMatrix);
-  mat4.rotateY(rotationMatrix, this.roty);
-  mat4.rotateX(rotationMatrix, this.rotx);
-
-  var cameraPosition = vec3.create(); // camera position in world space
-  mat4.multiplyVec3(rotationMatrix, [0, 0, this.distance], cameraPosition);
-  var center = vec3.add([this.movx, this.movy, 0], this.initialCenter);
-  vec3.add(cameraPosition, center);
-
-  var viewMatrix = mat4.lookAt(cameraPosition, center, [0, 1, 0], viewMatrix);
-
-  var mvMatrix = mat4.create();
-  mat4.multiply(modelMatrix, viewMatrix, mvMatrix);
-  gl.uniformMatrix4fv(program.uMVMatrix, false, mvMatrix);
-
-  var pMatrix = mat4.perspective(this.fovy, this.width / this.height, 0.1, 200.0, pMatrix);
-  gl.uniformMatrix4fv(program.uPMatrix, false, pMatrix);
-
-  // normal matrix; inverse transpose of mvMatrix;
-  // model -> view space; only applied to directional vectors (not points)
-  var nMatrix = mat4.create();
-  mat4.inverse(mvMatrix, nMatrix);
-  mat4.transpose(nMatrix);
-  gl.uniformMatrix4fv(program.uNMatrix, false, nMatrix);
-
-  // direction of light source defined in world space, then transformed to view space
-  var lightDirection = vec3.create(this.lightDirection); // world space
-  vec3.normalize(lightDirection);
-  mat4.multiplyVec3(nMatrix, lightDirection); // view space
-  vec3.normalize(lightDirection);
-  gl.uniform3fv(program.uLightDirection, lightDirection);
-
-  var lightColor = vec3.create(this.lightColor);
-  vec3.scale(lightColor, 1 / 255);
-  gl.uniform3fv(program.uLightColor, lightColor);
-};
-
 MMDGL.prototype.registerKeyListener = function registerKeyListener() {
   document.addEventListener('keydown', function(e) {
     switch(e.keyCode + e.shiftKey * 1000) {
@@ -349,6 +371,8 @@ MMDGL.prototype.initParameters = function initParameters() {
   this.lightDirection = [0.5, 1.0, 0.5];
   this.lightDistance = 8875;
   this.lightColor = [154, 154, 154];
+
+  this.selfShadow = true;
 };
 
 
@@ -410,4 +434,123 @@ MMDGL.TextureManager.prototype.get = function(type, url) {
   }.bind(this));
 
   return texture;
+};
+
+
+/*
+* MMDGL.ShadowMap class
+* var shadowMap = new MMDGL.ShadowMap(this);
+* shadowMap.generate();
+* var shadowMapTexture = shadowMap.getTexture();
+*/
+MMDGL.ShadowMap = function ShadowMap(mmdgl) {
+  this.mmd = mmdgl;
+  this.gl = mmdgl.gl;
+  this.program = mmdgl.program;
+  this.framebuffer = this.texture = null;
+  this.width = this.height = 2048;
+  this.faceVertsLength = mmdgl.model.faceVerts.length;
+  this.viewBroadness = 3;
+
+  this.initFramebuffer();
+};
+
+MMDGL.ShadowMap.prototype.initFramebuffer = function initFramebuffer() {
+  var gl = this.gl;
+
+  this.framebuffer = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffer);
+
+  this.texture = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, this.texture);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_NEAREST);
+  gl.generateMipmap(gl.TEXTURE_2D);
+
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, this.width, this.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+
+  var renderbuffer = gl.createRenderbuffer();
+  gl.bindRenderbuffer(gl.RENDERBUFFER, renderbuffer);
+  gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, this.width, this.height);
+
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.texture, 0);
+  gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, renderbuffer);
+
+  gl.bindTexture(gl.TEXTURE_2D, null);
+  gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+};
+
+MMDGL.ShadowMap.prototype.generate = function generate() {
+  var gl = this.gl;
+  var program = this.program;
+
+  gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffer);
+
+  gl.viewport(0, 0, this.width, this.height);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+  gl.uniform1i(program.uGenerateShadowMap, true);
+
+  // from mmd's vectors and matrices, calculate the "light" space's transform matrices
+
+  var center = this.mmd.center; // center of view in light space
+
+  var lightDirection = vec3.create(this.mmd.lightDirection); // this becomes a camera direction in light space
+  vec3.normalize(lightDirection);
+  vec3.add(lightDirection, center);
+
+  var cameraPosition = vec3.create(this.mmd.cameraPosition);
+  var lengthScale = vec3.length(vec3.subtract(cameraPosition, center));
+  var viewSize = lengthScale * this.viewBroadness;
+
+  var viewMatrix = mat4.lookAt(lightDirection, center, [0, 1, 0]);
+
+  var mvMatrix = mat4.create();
+  mat4.multiply(viewMatrix, this.mmd.modelMatrix, mvMatrix);
+  gl.uniformMatrix4fv(program.uMVMatrix, false, mvMatrix);
+
+  var left = center[0] - viewSize;
+  var right = center[0] + viewSize;
+  var bottom = center[1] - viewSize;
+  var top = center[1] + viewSize;
+  var near = -viewSize; // orthographic projection; near can be negative
+  var far = viewSize;
+  var pMatrix = mat4.ortho(left, right, bottom, top, near, far);
+  gl.uniformMatrix4fv(program.uPMatrix, false, pMatrix);
+
+  var mvpMatrix = mat4.multiply(pMatrix, mvMatrix);
+
+  gl.drawElements(gl.TRIANGLES, this.faceVertsLength, gl.UNSIGNED_SHORT, 0);
+
+  gl.bindTexture(gl.TEXTURE_2D, this.texture);
+  gl.generateMipmap(gl.TEXTURE_2D);
+  gl.bindTexture(gl.TEXTURE_2D, null);
+
+  //var pixelarray = new Uint8Array(this.width * this.height * 4);
+  //gl.readPixels(0, 0, this.width, this.height, gl.RGBA, gl.UNSIGNED_BYTE, pixelarray);
+  //var canvas = document.createElement('canvas');
+  //canvas.width = this.width;
+  //canvas.height = this.height;
+  //canvas.style.border = 'solid black 1px';
+  //var ctx = canvas.getContext('2d');
+  //var imageData = ctx.getImageData(0, 0, this.width, this.height);
+  //var data = imageData.data;
+  //for (var i = 0, l = data.length; i < l; i++) {
+    //data[i] = pixelarray[i];
+  //}
+  //ctx.putImageData(imageData, 0, 0);
+  //document.body.appendChild(canvas);
+
+  // display matrix transforms projection space to screen space. in fragment shader screen coordinates are available as gl_FragCoord
+  // http://www.c3.club.kyutech.ac.jp/gamewiki/index.php?3D%BA%C2%C9%B8%CA%D1%B4%B9
+  this.lightMatrix = mvpMatrix;
+  //this.lightMatrix = mat4.translate(this.lightMatrix, [0.5, 0.5, 0.5]);
+  //this.lightMatrix = mat4.scale(this.lightMatrix, [0.5, 0.5, 0.5]);
+
+  gl.uniform1i(program.uGenerateShadowMap, false);
+};
+
+MMDGL.ShadowMap.prototype.getTexture = function getTexture() {
+  return this.texture;
 };
