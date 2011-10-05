@@ -148,7 +148,7 @@
       vec2 toonCoord = vec2(0.0, 0.5 * (1.0 - dot( uLightDirection, norm )));
 
       if (uSelfShadow) {
-        vec3 lightCoord = vLightCoord.xyz / vLightCoord.w * 0.5 + 0.5; // projection to texture coordinate (in light space)
+        vec3 lightCoord = vLightCoord.xyz / vLightCoord.w; // projection to texture coordinate (in light space)
         vec4 rgbaDepth = texture2D(uShadowMap, lightCoord.xy);
         float depth = unpack_depth(rgbaDepth);
         if (depth < lightCoord.z - 0.01) {
