@@ -453,7 +453,7 @@ MMDGL.ShadowMap = function ShadowMap(mmdgl) {
   this.framebuffer = this.texture = null;
   this.width = this.height = 2048;
   this.faceVertsLength = mmdgl.model.faceVerts.length;
-  this.viewBroadness = 2;
+  this.viewBroadness = 0.6;
   this.debug = false;
 
   this.initFramebuffer();
@@ -554,8 +554,10 @@ MMDGL.ShadowMap.prototype.getLightMatrix = function getLightMatrix() {
 };
 
 MMDGL.ShadowMap.prototype.debugTexture = function debugTexture() {
+  var gl = this.gl;
   var pixelarray = new Uint8Array(this.width * this.height * 4);
   gl.readPixels(0, 0, this.width, this.height, gl.RGBA, gl.UNSIGNED_BYTE, pixelarray);
+
   var canvas = document.getElementById('shadowmap');
   if (!canvas) {
     var canvas = document.createElement('canvas');
