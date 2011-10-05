@@ -450,7 +450,7 @@ MMDGL.ShadowMap = function ShadowMap(mmdgl) {
   this.framebuffer = this.texture = null;
   this.width = this.height = 2048;
   this.faceVertsLength = mmdgl.model.faceVerts.length;
-  this.viewBroadness = 3;
+  this.viewBroadness = 1;
 
   this.initFramebuffer();
 };
@@ -494,7 +494,7 @@ MMDGL.ShadowMap.prototype.generate = function generate() {
 
   // from mmd's vectors and matrices, calculate the "light" space's transform matrices
 
-  var center = this.mmd.center; // center of view in light space
+  var center = vec3.create(this.mmd.center); // center of view in world space
 
   var lightDirection = vec3.create(this.mmd.lightDirection); // this becomes a camera direction in light space
   vec3.normalize(lightDirection);
@@ -510,6 +510,7 @@ MMDGL.ShadowMap.prototype.generate = function generate() {
   mat4.multiply(viewMatrix, this.mmd.modelMatrix, mvMatrix);
   gl.uniformMatrix4fv(program.uMVMatrix, false, mvMatrix);
 
+  mat4.multiplyVec3(viewMatrix, center); // transform center in view space
   var left = center[0] - viewSize;
   var right = center[0] + viewSize;
   var bottom = center[1] - viewSize;
@@ -527,12 +528,20 @@ MMDGL.ShadowMap.prototype.generate = function generate() {
   gl.generateMipmap(gl.TEXTURE_2D);
   gl.bindTexture(gl.TEXTURE_2D, null);
 
+  // for debug (display shadow map)
   //var pixelarray = new Uint8Array(this.width * this.height * 4);
   //gl.readPixels(0, 0, this.width, this.height, gl.RGBA, gl.UNSIGNED_BYTE, pixelarray);
-  //var canvas = document.createElement('canvas');
-  //canvas.width = this.width;
-  //canvas.height = this.height;
-  //canvas.style.border = 'solid black 1px';
+  //var canvas = document.getElementById('shadowmap');
+  //if (!canvas) {
+    //var canvas = document.createElement('canvas');
+    //canvas.id = 'shadowmap';
+    //canvas.width = this.width;
+    //canvas.height = this.height;
+    //canvas.style.border = 'solid black 1px';
+    //canvas.style.width = this.mmd.width + 'px';
+    //canvas.style.height = this.mmd.height + 'px';
+    //document.body.appendChild(canvas);
+  //}
   //var ctx = canvas.getContext('2d');
   //var imageData = ctx.getImageData(0, 0, this.width, this.height);
   //var data = imageData.data;
@@ -540,13 +549,12 @@ MMDGL.ShadowMap.prototype.generate = function generate() {
     //data[i] = pixelarray[i];
   //}
   //ctx.putImageData(imageData, 0, 0);
-  //document.body.appendChild(canvas);
 
   // display matrix transforms projection space to screen space. in fragment shader screen coordinates are available as gl_FragCoord
   // http://www.c3.club.kyutech.ac.jp/gamewiki/index.php?3D%BA%C2%C9%B8%CA%D1%B4%B9
   this.lightMatrix = mvpMatrix;
-  //this.lightMatrix = mat4.translate(this.lightMatrix, [0.5, 0.5, 0.5]);
   //this.lightMatrix = mat4.scale(this.lightMatrix, [0.5, 0.5, 0.5]);
+  //this.lightMatrix = mat4.translate(this.lightMatrix, [0.5, 0.5, 0.5]);
 
   gl.uniform1i(program.uGenerateShadowMap, false);
 };
