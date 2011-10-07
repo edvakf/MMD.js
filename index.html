@@ -30,11 +30,19 @@
 
   uniform bool uSelfShadow;
 
+  uniform bool uAxis;
+  uniform bool uCenterPoint;
+
   void main() {
     // return vertex point in projection space
     gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
 
-    if (uGenerateShadowMap) return;
+    if (uCenterPoint) {
+      gl_Position.z = 0.0; // always on top
+      gl_PointSize = 16.0;
+    }
+
+    if (uGenerateShadowMap || uAxis || uCenterPoint) return;
 
     // for fragment shader
     vTextureCoord = aTextureCoord;
@@ -91,6 +99,10 @@
   uniform bool uSelfShadow;
   uniform sampler2D uShadowMap;
 
+  uniform bool uAxis;
+  uniform vec3 uAxisColor;
+  uniform bool uCenterPoint;
+
   // from http://spidergl.org/example.php?id=6
   vec4 pack_depth(const in float depth) {
     const vec4 bit_shift = vec4(256.0*256.0*256.0, 256.0*256.0, 256.0, 1.0);
@@ -110,6 +122,20 @@
     if (uGenerateShadowMap) {
       //gl_FragData[0] = pack_depth(gl_FragCoord.z);
       gl_FragColor = pack_depth(gl_FragCoord.z);
+      return;
+    }
+    if (uAxis) {
+      gl_FragColor = vec4(uAxisColor, 1.0);
+      return;
+    }
+    if (uCenterPoint) {
+      vec2 uv = gl_PointCoord * 2.0 - 1.0; // transform [0, 1] -> [-1, 1] coord systems
+      float w = dot(uv, uv);
+      if (w < 0.3 || (w > 0.5 && w < 1.0)) {
+        gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+      } else {
+        discard;
+      }
       return;
     }
 

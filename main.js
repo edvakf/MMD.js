@@ -265,6 +265,8 @@ MMDGL.prototype.render = function render() {
     return offset + material.face_vert_count * 2;
   }.bind(this), 0);
 
+  this.renderAxes();
+
   gl.flush();
 };
 
@@ -287,25 +289,6 @@ MMDGL.prototype.computeMatrices = function computeMatrices() {
   // normal matrix; inverse transpose of mvMatrix;
   // model -> view space; only applied to directional vectors (not points)
   this.nMatrix = mat4.inverseTranspose(this.mvMatrix, mat4.create());
-};
-
-MMDGL.prototype.setUniforms = function setUniforms() {
-  var gl = this.gl;
-  var program = this.program;
-
-  gl.uniform1f(program.uEdgeThickness, this.edgeThickness);
-  gl.uniform3fv(program.uEdgeColor, this.edgeColor);
-  gl.uniformMatrix4fv(program.uMVMatrix, false, this.mvMatrix);
-  gl.uniformMatrix4fv(program.uPMatrix, false, this.pMatrix);
-  gl.uniformMatrix4fv(program.uNMatrix, false, this.nMatrix);
-
-  // direction of light source defined in world space, then transformed to view space
-  var lightDirection = vec3.createNormalize(this.lightDirection); // world space
-  mat4.multiplyVec3(this.nMatrix, lightDirection); // view space
-  gl.uniform3fv(program.uLightDirection, lightDirection);
-
-  var lightColor = vec3.scale(this.lightColor, 1 / 255, vec3.create());
-  gl.uniform3fv(program.uLightColor, lightColor);
 };
 
 MMDGL.prototype.renderMaterial = function renderMaterial(material, offset) {
@@ -356,6 +339,97 @@ MMDGL.prototype.renderEdge = function renderEdge(material, offset) {
     gl.drawElements(gl.TRIANGLES, material.face_vert_count, gl.UNSIGNED_SHORT, offset);
     gl.disable(gl.CULL_FACE);
   }
+};
+
+MMDGL.prototype.renderAxes = function renderAxes() {
+  var gl = this.gl;
+  var program = this.program;
+  var axis, color;
+
+  var axisBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, axisBuffer);
+  gl.vertexAttribPointer(program.aVertexPosition, 3, gl.FLOAT, false, 0, 0);
+  gl.uniform1i(program.uAxis, true);
+
+  axis = [
+    0, 0, 0,
+    65, 0, 0
+  ];
+  color = [1, 0, 0];
+
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(axis), gl.STATIC_DRAW);
+  gl.uniform3fv(program.uAxisColor, color);
+  gl.drawArrays(gl.LINES, 0, 2);
+
+  axis = [
+    0, 0, 0,
+    0, 65, 0
+  ];
+  color = [0, 1, 0];
+
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(axis), gl.STATIC_DRAW);
+  gl.uniform3fv(program.uAxisColor, color);
+  gl.drawArrays(gl.LINES, 0, 2);
+
+  axis = [
+    0, 0, 0,
+    0, 0, 65
+  ];
+  color = [0, 0, 1];
+
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(axis), gl.STATIC_DRAW);
+  gl.uniform3fv(program.uAxisColor, color);
+  gl.drawArrays(gl.LINES, 0, 2);
+
+  axis = [];
+  for (var i = -50; i <= 50; i += 5) if (i !== 0) {
+    axis.push(
+      i, 0, -50,
+      i, 0, 50, // one line parallel to the x-axis
+      -50, 0, i,
+      50, 0, i // one line parallel to the z-axis
+    );
+  }
+  axis.push(
+    0, 0, -50,
+    0, 0, 0,
+    -50, 0, 0,
+    0, 0, 0
+  );
+  color = [0.7, 0.7, 0.7];
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(axis), gl.STATIC_DRAW);
+  gl.uniform3fv(program.uAxisColor, color);
+  gl.drawArrays(gl.LINES, 0, 84);
+
+  gl.uniform1i(program.uAxis, false);
+
+  // draw center point
+  gl.uniform1i(program.uCenterPoint, true);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.center), gl.STATIC_DRAW);
+  gl.drawArrays(gl.POINTS, 0, 1);
+  gl.uniform1i(program.uCenterPoint, false);
+
+  gl.deleteBuffer(axisBuffer);
+  gl.bindBuffer(gl.ARRAY_BUFFER, null);
+};
+
+MMDGL.prototype.setUniforms = function setUniforms() {
+  var gl = this.gl;
+  var program = this.program;
+
+  gl.uniform1f(program.uEdgeThickness, this.edgeThickness);
+  gl.uniform3fv(program.uEdgeColor, this.edgeColor);
+  gl.uniformMatrix4fv(program.uMVMatrix, false, this.mvMatrix);
+  gl.uniformMatrix4fv(program.uPMatrix, false, this.pMatrix);
+  gl.uniformMatrix4fv(program.uNMatrix, false, this.nMatrix);
+
+  // direction of light source defined in world space, then transformed to view space
+  var lightDirection = vec3.createNormalize(this.lightDirection); // world space
+  mat4.multiplyVec3(this.nMatrix, lightDirection); // view space
+  gl.uniform3fv(program.uLightDirection, lightDirection);
+
+  var lightColor = vec3.scale(this.lightColor, 1 / 255, vec3.create());
+  gl.uniform3fv(program.uLightColor, lightColor);
 };
 
 MMDGL.prototype.registerKeyListener = function registerKeyListener() {
