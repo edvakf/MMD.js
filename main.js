@@ -252,6 +252,7 @@ MMDGL.prototype.redraw = function redraw() {
 
     // reset
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, this.width, this.height); // not needed on Windows Chrome but necessary on Mac Chrome
   }
 
   this.setUniforms();
