@@ -75,7 +75,7 @@ function MMDGL(canvas, width, height) {
 
   this.textureManager = new MMDGL.TextureManager(this);
   this.textureManager.onload = function() {
-    this.redrawNext = true;
+    this.redraw = true;
   }.bind(this);
 }
 
@@ -216,14 +216,14 @@ MMDGL.prototype.start = function start() {
   gl.clearDepth(1); // ?
   gl.enable(gl.DEPTH_TEST);
 
-  this.redrawNext = true;
+  this.redraw = true;
   this.registerKeyListener();
-  setInterval(this.redraw.bind(this), 50);
+  setInterval(this.render.bind(this), 50);
 };
 
-MMDGL.prototype.redraw = function redraw() {
-  if (!this.redrawNext) return;
-  this.redrawNext = false;
+MMDGL.prototype.render = function render() {
+  if (!this.redraw) return;
+  this.redraw = false;
 
   var gl = this.gl;
   var program = this.program;
@@ -376,7 +376,7 @@ MMDGL.prototype.registerKeyListener = function registerKeyListener() {
       default: return;
     }
     e.preventDefault();
-    this.redrawNext = true;
+    this.redraw = true;
   }.bind(this), false);
 };
 
