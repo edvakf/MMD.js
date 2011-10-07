@@ -1,3 +1,40 @@
+// utility for glMatrix
+mat4.createIdentity = function() {
+  return mat4.identity(mat4.create());
+};
+mat4.createMultiply = function(a, b) {
+  return mat4.multiply(a, b, mat4.create());
+};
+mat4.inverseTranspose = function(mat, dest) {
+  if (!dest || mat == dest) {
+    return mat4.transpose(mat4.inverse(mat));
+  }
+  return mat4.transpose(mat4.inverse(mat, dest));
+};
+mat4.applyScale = function(mat, vec) {
+  var scaling = mat4.scale(mat4.identity(mat4.create()), vec);
+  return mat4.multiply(scaling, mat, mat);
+};
+mat4.applyTranslate = function(mat, vec) {
+  var translation = mat4.translate(mat4.identity(mat4.create()), vec);
+  return mat4.multiply(translation, mat, mat);
+};
+vec3.moveBy = vec3.add;
+vec3.rotateX = function(vec, angle, dest) {
+  var rotation = mat4.rotateX(mat4.identity(mat4.create()), angle);
+  return mat4.multiplyVec3(rotation, vec, dest);
+};
+vec3.rotateY = function(vec, angle, dest) {
+  var rotation = mat4.rotateY(mat4.identity(mat4.create()), angle);
+  return mat4.multiplyVec3(rotation, vec, dest);
+};
+vec3.createNormalize = function(vec) {
+  return vec3.normalize(vec3.create(vec));
+};
+vec3.lengthBetween = function(a, b) {
+  return vec3.length([a[0] - b[0], a[1] - b[1], a[2] - b[2]]);
+};
+
 window.onload = function() {
   var canvas = document.createElement('canvas');
   canvas.width = 500;
@@ -231,31 +268,24 @@ MMDGL.prototype.redraw = function redraw() {
 };
 
 MMDGL.prototype.computeMatrices = function computeMatrices() {
-  this.modelMatrix = mat4.create();
-  mat4.identity(this.modelMatrix); // model aligned with the world for now
+  this.modelMatrix = mat4.createIdentity(); // model aligned with the world for now
 
-  var rotationMatrix = mat4.create(); // to rotate camera position according to rotx and roty
-  mat4.identity(rotationMatrix);
-  mat4.rotateY(rotationMatrix, this.roty);
-  mat4.rotateX(rotationMatrix, this.rotx);
+  this.center = vec3.moveBy(this.initialCenter, [this.movx, this.movy, 0], vec3.create());
 
-  this.cameraPosition = vec3.create(); // camera position in world space
-  mat4.multiplyVec3(rotationMatrix, [0, 0, this.distance], this.cameraPosition);
-  this.center = vec3.add([this.movx, this.movy, 0], this.initialCenter);
-  vec3.add(this.cameraPosition, this.center);
+  this.cameraPosition = vec3.create([0, 0, this.distance]); // camera position in world space
+  vec3.rotateY(this.cameraPosition, this.roty);
+  vec3.rotateX(this.cameraPosition, this.rotx);
+  vec3.moveBy(this.cameraPosition, this.center);
 
   this.viewMatrix = mat4.lookAt(this.cameraPosition, this.center, [0, 1, 0]);
 
-  this.mvMatrix = mat4.create();
-  mat4.multiply(this.viewMatrix, this.modelMatrix, this.mvMatrix);
+  this.mvMatrix = mat4.createMultiply(this.viewMatrix, this.modelMatrix);
 
   this.pMatrix = mat4.perspective(this.fovy, this.width / this.height, 0.1, 200.0);
 
   // normal matrix; inverse transpose of mvMatrix;
   // model -> view space; only applied to directional vectors (not points)
-  this.nMatrix = mat4.create();
-  mat4.inverse(this.mvMatrix, this.nMatrix);
-  mat4.transpose(this.nMatrix);
+  this.nMatrix = mat4.inverseTranspose(this.mvMatrix, mat4.create());
 };
 
 MMDGL.prototype.setUniforms = function setUniforms() {
@@ -269,14 +299,11 @@ MMDGL.prototype.setUniforms = function setUniforms() {
   gl.uniformMatrix4fv(program.uNMatrix, false, this.nMatrix);
 
   // direction of light source defined in world space, then transformed to view space
-  var lightDirection = vec3.create(this.lightDirection); // world space
-  vec3.normalize(lightDirection);
+  var lightDirection = vec3.createNormalize(this.lightDirection); // world space
   mat4.multiplyVec3(this.nMatrix, lightDirection); // view space
-  vec3.normalize(lightDirection);
   gl.uniform3fv(program.uLightDirection, lightDirection);
 
-  var lightColor = vec3.create(this.lightColor);
-  vec3.scale(lightColor, 1 / 255);
+  var lightColor = vec3.scale(this.lightColor, 1 / 255, vec3.create());
   gl.uniform3fv(program.uLightColor, lightColor);
 };
 
@@ -495,18 +522,16 @@ MMDGL.ShadowMap.prototype.computeMatrices = function computeMatrices() {
 
   var center = vec3.create(this.mmd.center); // center of view in world space
 
-  var lightDirection = vec3.create(this.mmd.lightDirection); // this becomes a camera direction in light space
-  vec3.normalize(lightDirection);
+  var lightDirection = vec3.createNormalize(this.mmd.lightDirection); // this becomes a camera direction in light space
   vec3.add(lightDirection, center);
 
   var cameraPosition = vec3.create(this.mmd.cameraPosition);
-  var lengthScale = vec3.length(vec3.subtract(cameraPosition, center));
+  var lengthScale = vec3.lengthBetween(cameraPosition, center);
   var size = lengthScale * this.viewBroadness; // size of shadow map
 
   var viewMatrix = mat4.lookAt(lightDirection, center, [0, 1, 0]);
 
-  this.mvMatrix = mat4.create();
-  mat4.multiply(viewMatrix, this.mmd.modelMatrix, this.mvMatrix);
+  this.mvMatrix = mat4.createMultiply(viewMatrix, this.mmd.modelMatrix);
 
   mat4.multiplyVec3(viewMatrix, center); // transform center in view space
   var cx = center[0], cy = center[1];
@@ -539,17 +564,9 @@ MMDGL.ShadowMap.prototype.render = function render() {
 MMDGL.ShadowMap.prototype.getLightMatrix = function getLightMatrix() {
   // display matrix transforms projection space to screen space. in fragment shader screen coordinates are available as gl_FragCoord
   // http://www.c3.club.kyutech.ac.jp/gamewiki/index.php?3D%BA%C2%C9%B8%CA%D1%B4%B9
-  var mvpMatrix = mat4.create();
-  mat4.multiply(this.pMatrix, this.mvMatrix, mvpMatrix);
-  var lightMatrix = mvpMatrix;
-  var scale = mat4.create();
-    mat4.identity(scale);
-    mat4.scale(scale, [0.5, 0.5, 0.5]);
-  var translate = mat4.create();
-    mat4.identity(translate);
-    mat4.translate(translate, [0.5, 0.5, 0.5]);
-  mat4.multiply(scale, lightMatrix, lightMatrix);
-  mat4.multiply(translate, lightMatrix, lightMatrix);
+  var lightMatrix = mat4.createMultiply(this.pMatrix, this.mvMatrix);
+  mat4.applyScale(lightMatrix, [0.5, 0.5, 0.5]);
+  mat4.applyTranslate(lightMatrix, [0.5, 0.5, 0.5]);
   return lightMatrix;
 };
 
