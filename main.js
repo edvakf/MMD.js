@@ -5,6 +5,9 @@ mat4.createIdentity = function() {
 mat4.createMultiply = function(a, b) {
   return mat4.multiply(a, b, mat4.create());
 };
+mat4.createInverse = function(mat) {
+  return mat4.inverse(mat, mat4.create());
+};
 mat4.inverseTranspose = function(mat, dest) {
   if (!dest || mat == dest) {
     return mat4.transpose(mat4.inverse(mat));
@@ -33,6 +36,9 @@ vec3.createNormalize = function(vec) {
 };
 vec3.lengthBetween = function(a, b) {
   return vec3.length([a[0] - b[0], a[1] - b[1], a[2] - b[2]]);
+};
+vec3.multiplyMat4 = function(vec, mat, dest) {
+  return mat4.multiplyVec3(mat, vec, dest);
 };
 
 window.onload = function() {
@@ -218,7 +224,25 @@ MMDGL.prototype.start = function start() {
 
   this.redraw = true;
   this.registerKeyListener();
-  setInterval(this.render.bind(this), 50);
+  var requestAnimationFrame =
+    window.requestAnimationFrame ||
+    window.webkitRequestAnimationFrame ||
+    window.mozRequestAnimationFrame ||
+    window.oRequestAnimationFrame ||
+    window.msRequestAnimationFrame;
+
+  if (requestAnimationFrame) {
+    requestAnimationFrame(function animate() {
+      this.computeMatrices();
+      this.render();
+      requestAnimationFrame(animate.bind(this));
+    }.bind(this));
+  } else {
+    setInterval(function() {
+      this.computeMatrices();
+      this.render();
+    }.bind(this), 1000/60);
+  }
 };
 
 MMDGL.prototype.render = function render() {
@@ -231,8 +255,6 @@ MMDGL.prototype.render = function render() {
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   gl.viewport(0, 0, this.width, this.height);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
-  this.computeMatrices();
 
   this.vbuffers.forEach(function(vb) {
     gl.bindBuffer(gl.ARRAY_BUFFER, vb.buffer);
@@ -273,14 +295,16 @@ MMDGL.prototype.render = function render() {
 MMDGL.prototype.computeMatrices = function computeMatrices() {
   this.modelMatrix = mat4.createIdentity(); // model aligned with the world for now
 
-  this.center = vec3.moveBy(this.initialCenter, [this.movx, this.movy, 0], vec3.create());
-
   this.cameraPosition = vec3.create([0, 0, this.distance]); // camera position in world space
-  vec3.rotateY(this.cameraPosition, this.roty);
   vec3.rotateX(this.cameraPosition, this.rotx);
+  vec3.rotateY(this.cameraPosition, this.roty);
   vec3.moveBy(this.cameraPosition, this.center);
 
-  this.viewMatrix = mat4.lookAt(this.cameraPosition, this.center, [0, 1, 0]);
+  var up = [0, 1, 0];
+  vec3.rotateX(up, this.rotx);
+  vec3.rotateY(up, this.roty);
+
+  this.viewMatrix = mat4.lookAt(this.cameraPosition, this.center, up);
 
   this.mvMatrix = mat4.createMultiply(this.viewMatrix, this.modelMatrix);
 
@@ -434,19 +458,39 @@ MMDGL.prototype.setUniforms = function setUniforms() {
 
 MMDGL.prototype.registerKeyListener = function registerKeyListener() {
   document.addEventListener('keydown', function(e) {
-    switch(e.keyCode + e.shiftKey * 1000) {
+    switch(e.keyCode + e.shiftKey * 1000 + e.ctrlKey *10000 + e.altKey * 100000) {
       case 37: this.roty += Math.PI / 12; break; // left
       case 39: this.roty -= Math.PI / 12; break; // right
-      case 38: this.rotx = Math.atan(Math.tan(this.rotx) + 1/2); break; // up
-      case 40: this.rotx = Math.atan(Math.tan(this.rotx) - 1/2); break; // down
+      case 38: this.rotx += Math.PI / 12; break; // up
+      case 40: this.rotx -= Math.PI / 12; break; // down
       case 33: this.distance -= 3 * this.distance / this.DIST; break; // pageup
       case 34: this.distance += 3 * this.distance / this.DIST; break; // pagedown
-      //case 35: this.movx -= 3; break; // end
-      case 36: with(this){rotx = roty = movx = movy = 0; distance = DIST;} break; // home
-      case 1037: this.movx += this.distance / this.DIST; break; // left
-      case 1039: this.movx -= this.distance / this.DIST; break; // right
-      case 1038: this.movy -= this.distance / this.DIST; break; // up
-      case 1040: this.movy += this.distance / this.DIST; break; // down
+      //case 35: break; // end
+      case 36: // home
+        this.rotx = this.roty = 0;
+        this.center = [0, 10, 0];
+        this.distance = this.DIST;
+        break;
+      case 1037: // shift + left
+        vec3.multiplyMat4(this.center, this.mvMatrix);
+        this.center[0] += this.distance / this.DIST;
+        vec3.multiplyMat4(this.center, mat4.createInverse(this.mvMatrix));
+        break;
+      case 1039: // shift + right
+        vec3.multiplyMat4(this.center, this.mvMatrix);
+        this.center[0] -= this.distance / this.DIST;
+        vec3.multiplyMat4(this.center, mat4.createInverse(this.mvMatrix));
+        break;
+      case 1038: // shift + up
+        vec3.multiplyMat4(this.center, this.mvMatrix);
+        this.center[1] -= this.distance / this.DIST;
+        vec3.multiplyMat4(this.center, mat4.createInverse(this.mvMatrix));
+        break;
+      case 1040: // shift + down
+        vec3.multiplyMat4(this.center, this.mvMatrix);
+        this.center[1] += this.distance / this.DIST;
+        vec3.multiplyMat4(this.center, mat4.createInverse(this.mvMatrix));
+        break;
       default: return;
     }
     e.preventDefault();
@@ -457,9 +501,8 @@ MMDGL.prototype.registerKeyListener = function registerKeyListener() {
 MMDGL.prototype.initParameters = function initParameters() {
   // camera/view settings
   this.rotx = this.roty = 0;
-  this.movx = this.movy = 0;
   this.distance = this.DIST = 35;
-  this.initialCenter = [0, 10, 0];
+  this.center = [0, 10, 0];
   this.fovy = 40;
 
   // edge
