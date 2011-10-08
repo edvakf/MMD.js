@@ -224,6 +224,7 @@ MMDGL.prototype.start = function start() {
 
   this.redraw = true;
   this.registerKeyListener();
+  this.registerMouseListener();
   var requestAnimationFrame =
     window.requestAnimationFrame ||
     window.webkitRequestAnimationFrame ||
@@ -495,6 +496,58 @@ MMDGL.prototype.registerKeyListener = function registerKeyListener() {
     }
     e.preventDefault();
     this.redraw = true;
+  }.bind(this), false);
+};
+
+MMDGL.prototype.registerMouseListener = function registerMouseListener() {
+  // drag
+  document.addEventListener('mousedown', function onmousedown(e) {
+    if (e.button != 0) return;
+    var modifier = e.shiftKey * 1000 + e.ctrlKey *10000 + e.altKey * 100000;
+    if (modifier !== 0 && modifier !== 1000) return;
+    var ox = e.clientX, oy = e.clientY;
+
+    var move = function (dx, dy, modi) {
+      if (modi === 0) {
+        this.roty -= dx / 100;
+        this.rotx -= dy / 100;
+        this.redraw = true;
+      } else if (modi === 1000){
+        vec3.multiplyMat4(this.center, this.mvMatrix);
+        this.center[0] -= dx / 30 * this.distance / this.DIST;
+        this.center[1] += dy / 30 * this.distance / this.DIST;
+        vec3.multiplyMat4(this.center, mat4.createInverse(this.mvMatrix));
+        this.redraw = true;
+      }
+    }.bind(this);
+
+    var onmouseup = function(e) {
+      if (e.button != 0) return;
+      var modi = e.shiftKey * 1000 + e.ctrlKey *10000 + e.altKey * 100000;
+      move(e.clientX - ox, e.clientY - oy, modi);
+      document.removeEventListener('mouseup', onmouseup, false);
+      document.removeEventListener('mousemove', onmousemove, false);
+      e.preventDefault();
+    }.bind(this);
+
+    var onmousemove = function(e) {
+      if (e.button != 0) return;
+      var modi = e.shiftKey * 1000 + e.ctrlKey *10000 + e.altKey * 100000;
+      var x = e.clientX, y = e.clientY;
+      move(x - ox, y - oy, modi);
+      ox = x, oy = y;
+      e.preventDefault();
+    }.bind(this);
+
+    document.addEventListener('mouseup', onmouseup, false);
+    document.addEventListener('mousemove', onmousemove, false);
+  }.bind(this), false);
+
+  // wheel
+  document.addEventListener('mousewheel', function scroll(e) {
+    var delta = e.detail || e.wheelDelta / (-40); // wheel down -> positive
+    this.distance += delta * this.distance / this.DIST;
+    e.preventDefault();
   }.bind(this), false);
 };
 
