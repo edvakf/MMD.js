@@ -1,177 +1,664 @@
-// see http://blog.goo.ne.jp/torisu_tetosuki/e/209ad341d3ece2b1b4df24abf619d6e4
+(function() {
+  var Bone, IK, Joint, Material, Morph, RigidBody, Vertex, size_Float32, size_Int8, size_Uint16, size_Uint32, size_Uint8, slice;
 
-size_Int8 = Int8Array.BYTES_PER_ELEMENT;
-size_Uint8 = Uint8Array.BYTES_PER_ELEMENT;
-size_Uint16 = Uint16Array.BYTES_PER_ELEMENT;
-size_Uint32 = Uint32Array.BYTES_PER_ELEMENT;
-size_Float32 = Float32Array.BYTES_PER_ELEMENT;
+  size_Int8 = Int8Array.BYTES_PER_ELEMENT;
 
-function Model(directory, filename) {
-  this.directory = directory;
-  this.filename = filename;
-  this.buffer = null;
-  this.vertices = null;
-  this.faceVerts = null;
-  this.materials = null;
-}
+  size_Uint8 = Uint8Array.BYTES_PER_ELEMENT;
 
-Model.prototype.load = function(callback) {
-  var xhr = new XMLHttpRequest;
-  xhr.open('GET', this.directory + '/' + this.filename, true);
-  xhr.responseType = 'arraybuffer';
-  var that = this;
-  xhr.onload = function() {
-    that.buffer = xhr.response;
-    that.getName();
-    that.getVertices();
-    that.getFaces();
-    that.getMaterials();
-    //TODO: 
-    callback && callback();
-  };
-  xhr.send();
-};
+  size_Uint16 = Uint16Array.BYTES_PER_ELEMENT;
 
-Model.prototype.getName = function() {
-  var header = new Uint8Array(this.buffer, 0, 7 + 20 + 256);
-  if (header[0] !== 'P'.charCodeAt(0) ||
-      header[1] !== 'm'.charCodeAt(0) ||
-      header[2] !== 'd'.charCodeAt(0) ||
-      header[3] !== 0x00 ||
-      header[4] !== 0x00 ||
-      header[5] !== 0x80 ||
-      header[6] !== 0x3F
-  ) {
-    throw 'File is not PMD';
-  }
-  this.name = sjisArrayToString(Array.prototype.slice.call(header, 7, 7 + 20));
-  //console.log(this.name);
-  this.comment = sjisArrayToString(Array.prototype.slice.call(header, 7 + 20, 7 + 20 + 256));
-  //console.log(this.comment);
-};
+  size_Uint32 = Uint32Array.BYTES_PER_ELEMENT;
 
-Model.prototype.getVertices = function() {
-  var view = new DataView(this.buffer, this.getVertexBlockOffset());
-  var length = view.getUint32(0, true);
-  //console.log(view, length);
-  this.vertices = [];
-  for (var i = 0; i < length; i++) {
-    this.vertices.push(new Vertex(view, size_Uint32 + i * Vertex.size));
-  }
-  //console.log(this.vertices[0]);
-  //console.log(this.vertices[length - 1]);
-};
+  size_Float32 = Float32Array.BYTES_PER_ELEMENT;
 
-Model.prototype.getFaces = function() {
-  var view = new DataView(this.buffer, this.getFaceBlockOffset());
-  var length = view.getUint32(0, true);
-  this.faceVerts = new Uint16Array(length);
-  //for (var i = 0; i < length; i++) {
-    //this.faceVerts[i] = view.getUint16(size_Uint32 + i * size_Uint16, true);
-  //}
-  // 左手系→右手系変換 (0番目と1番目の頂点を入れ替え)
-  for (var i = 0; i < length; i += 3) {
-    this.faceVerts[i + 1] = view.getUint16(size_Uint32 + i * size_Uint16, true);
-    this.faceVerts[i] = view.getUint16(size_Uint32 + (i + 1) * size_Uint16, true);
-    this.faceVerts[i + 2] = view.getUint16(size_Uint32 + (i + 2) * size_Uint16, true);
-  }
-};
+  slice = Array.prototype.slice;
 
-Model.prototype.getMaterials = function() {
-  var view = new DataView(this.buffer, this.getMaterialBlockOffset());
-  var length = view.getUint32(0, true);
-  this.materials = [];
-  for (var i = 0; i < length; i++) {
-    this.materials.push(new Material(view, size_Uint32 + i * Material.size));
-  }
-  //console.log(this.materials);
-  //console.log(this.materials[0]);
-};
+  this.Model = (function() {
 
+    function Model(directory, filename) {
+      this.directory = directory;
+      this.filename = filename;
+      this.vertices = null;
+      this.triangles = null;
+      this.materials = null;
+      this.bones = null;
+      this.morphs = null;
+      this.morph_order = null;
+      this.bone_group_names = null;
+      this.bone_table = null;
+      this.english_flag = null;
+      this.english_name = null;
+      this.english_comment = null;
+      this.english_bone_names = null;
+      this.english_morph_names = null;
+      this.english_bone_group_names = null;
+      this.additional_toon_file_names = null;
+      this.rigid_bodies = null;
+      this.joints = null;
+    }
 
-Model.prototype.getHeaderBlockSize = function() {
-  return 7 + 20 + 256;
-};
+    Model.prototype.load = function(callback) {
+      var xhr;
+      var _this = this;
+      xhr = new XMLHttpRequest;
+      xhr.open('GET', this.directory + '/' + this.filename, true);
+      xhr.responseType = 'arraybuffer';
+      xhr.onload = function() {
+        console.time('parse');
+        _this.parse(xhr.response);
+        console.timeEnd('parse');
+        return callback();
+      };
+      return xhr.send();
+    };
 
-Model.prototype.getVertexBlockOffset = function() {
-  return this.getHeaderBlockSize();
-};
+    Model.prototype.parse = function(buffer) {
+      var length, offset, view;
+      length = buffer.byteLength;
+      view = new DataView(buffer, 0);
+      offset = 0;
+      offset = this.checkHeader(buffer, view, offset);
+      offset = this.getName(buffer, view, offset);
+      offset = this.getVertices(buffer, view, offset);
+      offset = this.getTriangles(buffer, view, offset);
+      offset = this.getMaterials(buffer, view, offset);
+      offset = this.getBones(buffer, view, offset);
+      offset = this.getIKs(buffer, view, offset);
+      offset = this.getMorphs(buffer, view, offset);
+      offset = this.getMorphOrder(buffer, view, offset);
+      offset = this.getBoneGroupNames(buffer, view, offset);
+      offset = this.getBoneTable(buffer, view, offset);
+      if (offset >= length) return;
+      offset = this.getEnglishFlag(buffer, view, offset);
+      offset = this.getEnglishName(buffer, view, offset);
+      offset = this.getEnglishBoneNames(buffer, view, offset);
+      offset = this.getEnglishMorphNames(buffer, view, offset);
+      offset = this.getEnglishBoneGroupNames(buffer, view, offset);
+      if (offset >= length) return;
+      offset = this.getToonFileNames(buffer, view, offset);
+      if (offset >= length) return;
+      offset = this.getRigidBodies(buffer, view, offset);
+      return offset = this.getJoints(buffer, view, offset);
+    };
 
-Model.prototype.getVertexBlockSize = function() {
-  return size_Uint32 + this.vertices.length * Vertex.size;
-}
+    Model.prototype.checkHeader = function(buffer, view, offset) {
+      if (view.getUint8(0) !== 'P'.charCodeAt(0) || view.getUint8(1) !== 'm'.charCodeAt(0) || view.getUint8(2) !== 'd'.charCodeAt(0) || view.getUint8(3) !== 0x00 || view.getUint8(4) !== 0x00 || view.getUint8(5) !== 0x80 || view.getUint8(6) !== 0x3F) {
+        throw 'File is not PMD';
+      }
+      return offset += 7 * size_Uint8;
+    };
 
-Model.prototype.getFaceBlockOffset = function() {
-  return this.getVertexBlockOffset() + this.getVertexBlockSize();
-};
+    Model.prototype.getName = function(buffer, view, offset) {
+      var block;
+      block = new Uint8Array(buffer, offset, 20 + 256);
+      this.name = sjisArrayToString(slice.call(block, 0, 20));
+      this.comment = sjisArrayToString(slice.call(block, 20, 20 + 256));
+      return offset += (20 + 256) * size_Uint8;
+    };
 
-Model.prototype.getFaceBlockSize = function() {
-  return size_Uint32 + this.faceVerts.length * size_Uint16;
-};
+    Model.prototype.getVertices = function(buffer, view, offset) {
+      var i, length;
+      length = view.getUint32(offset, true);
+      offset += size_Uint32;
+      this.vertices = (function() {
+        var _results;
+        _results = [];
+        for (i = 0; 0 <= length ? i < length : i > length; 0 <= length ? i++ : i--) {
+          _results.push(new Vertex(buffer, view, offset + i * Vertex.size));
+        }
+        return _results;
+      })();
+      return offset += length * Vertex.size;
+    };
 
-Model.prototype.getMaterialBlockOffset = function() {
-  return this.getFaceBlockOffset() + this.getFaceBlockSize();
-};
+    Model.prototype.getTriangles = function(buffer, view, offset) {
+      var i, length;
+      length = view.getUint32(offset, true);
+      offset += size_Uint32;
+      this.triangles = new Uint16Array(length);
+      for (i = 0; i < length; i += 3) {
+        this.triangles[i + 1] = view.getUint16(offset + i * size_Uint16, true);
+        this.triangles[i] = view.getUint16(offset + (i + 1) * size_Uint16, true);
+        this.triangles[i + 2] = view.getUint16(offset + (i + 2) * size_Uint16, true);
+      }
+      return offset += length * size_Uint16;
+    };
 
-//http://blog.goo.ne.jp/torisu_tetosuki/e/5a1b16e2f61067838dfc66d010389707
-//float pos[3]; // x, y, z // 座標
-//float normal_vec[3]; // nx, ny, nz // 法線ベクトル
-//float uv[2]; // u, v // UV座標 // MMDは頂点UV
-//WORD bone_num[2]; // ボーン番号1、番号2 // モデル変形(頂点移動)時に影響
-//BYTE bone_weight; // ボーン1に与える影響度 // min:0 max:100 // ボーン2への影響度は、(100 - bone_weight)
-//BYTE edge_flag; // 0:通常、1:エッジ無効 // エッジ(輪郭)が有効の場合
-Vertex = function(view, offset) {
-  this.x = view.getFloat32(offset, true); offset += size_Float32;
-  this.y = view.getFloat32(offset, true); offset += size_Float32;
-  this.z = - view.getFloat32(offset, true); offset += size_Float32; // 左手系→右手系変換
-  this.nx = view.getFloat32(offset, true); offset += size_Float32;
-  this.ny = view.getFloat32(offset, true); offset += size_Float32;
-  this.nz = - view.getFloat32(offset, true); offset += size_Float32; // 左手系→右手系変換
-  this.u = view.getFloat32(offset, true); offset += size_Float32;
-  this.v = view.getFloat32(offset, true); offset += size_Float32;
-  this.bone_num1 = view.getUint16(offset, true); offset += size_Uint16;
-  this.bone_num2 = view.getUint16(offset, true); offset += size_Uint16;
-  this.bone_weight = view.getUint8(offset); offset += size_Uint8;
-  this.edge_flag = view.getUint8(offset); offset += size_Uint8;
-};
+    Model.prototype.getMaterials = function(buffer, view, offset) {
+      var i, length;
+      length = view.getUint32(offset, true);
+      offset += size_Uint32;
+      this.materials = (function() {
+        var _results;
+        _results = [];
+        for (i = 0; 0 <= length ? i < length : i > length; 0 <= length ? i++ : i--) {
+          _results.push(new Material(buffer, view, offset + i * Material.size));
+        }
+        return _results;
+      })();
+      return offset += length * Material.size;
+    };
 
-Vertex.size = size_Float32 * 8 + size_Uint16 * 2 + size_Uint8 * 2; // 38
+    Model.prototype.getBones = function(buffer, view, offset) {
+      var i, length;
+      length = view.getUint16(offset, true);
+      offset += size_Uint16;
+      this.bones = (function() {
+        var _results;
+        _results = [];
+        for (i = 0; 0 <= length ? i < length : i > length; 0 <= length ? i++ : i--) {
+          _results.push(new Bone(buffer, view, offset + i * Bone.size));
+        }
+        return _results;
+      })();
+      return offset += length * Bone.size;
+    };
 
-//http://blog.goo.ne.jp/torisu_tetosuki/e/ea0bb1b1d4c6ad98a93edbfe359dac32
-//float diffuse_color[3]; // dr, dg, db // 減衰色
-//float alpha;
-//float specularity;
-//float specular_color[3]; // sr, sg, sb // 光沢色
-//float mirror_color[3]; // mr, mg, mb // 環境色(ambient)
-//BYTE toon_index; // toon??.bmp // 0.bmp:0xFF, 1(01).bmp:0x00 ・・・ 10.bmp:0x09
-//BYTE edge_flag; // 輪郭、影
-//DWORD face_vert_count; // 面頂点数 // インデックスに変換する場合は、材質0から順に加算
-//char texture_file_name[20]; // テクスチャファイル名またはスフィアファイル名 // 20バイトぎりぎりまで使える(終端の0x00は無くても動く)
-Material = function(view, offset) {
-  var tmp = [];
-  tmp[0] = view.getFloat32(offset, true); offset += size_Float32;
-  tmp[1] = view.getFloat32(offset, true); offset += size_Float32;
-  tmp[2] = view.getFloat32(offset, true); offset += size_Float32;
-  this.diffuse = new Float32Array(tmp);
-  this.alpha = view.getFloat32(offset, true); offset += size_Float32;
-  this.shininess = view.getFloat32(offset, true); offset += size_Float32;
-  tmp[0] = view.getFloat32(offset, true); offset += size_Float32;
-  tmp[1] = view.getFloat32(offset, true); offset += size_Float32;
-  tmp[2] = view.getFloat32(offset, true); offset += size_Float32;
-  this.specular = new Float32Array(tmp);
-  tmp[0] = view.getFloat32(offset, true); offset += size_Float32;
-  tmp[1] = view.getFloat32(offset, true); offset += size_Float32;
-  tmp[2] = view.getFloat32(offset, true); offset += size_Float32;
-  this.ambient = new Float32Array(tmp);
-  this.toon_index = view.getInt8(offset); offset += size_Int8;
-  this.edge_flag = view.getUint8(offset); offset += size_Uint8;
-  this.face_vert_count = view.getUint32(offset, true); offset += size_Uint32;
-  var filename_sjis = [];
-  for (var i = 0; i < 20; i++) {
-    filename_sjis.push(view.getUint8(offset + size_Uint8 * i));
-  }
-  this.texture_file_name = sjisArrayToString(filename_sjis);
-};
+    Model.prototype.getIKs = function(buffer, view, offset) {
+      var i, ik, length;
+      length = view.getUint16(offset, true);
+      offset += size_Uint16;
+      this.iks = (function() {
+        var _results;
+        _results = [];
+        for (i = 0; 0 <= length ? i < length : i > length; 0 <= length ? i++ : i--) {
+          ik = new IK(buffer, view, offset);
+          offset += ik.getSize();
+          _results.push(ik);
+        }
+        return _results;
+      })();
+      return offset;
+    };
 
-Material.size = size_Float32 * 11 + size_Uint8 * 2 + size_Uint32 + size_Uint8 * 20; // 70
+    Model.prototype.getMorphs = function(buffer, view, offset) {
+      var exp, i, length;
+      length = view.getUint16(offset, true);
+      offset += size_Uint16;
+      this.morphs = (function() {
+        var _results;
+        _results = [];
+        for (i = 0; 0 <= length ? i < length : i > length; 0 <= length ? i++ : i--) {
+          exp = new Morph(buffer, view, offset);
+          offset += exp.getSize();
+          _results.push(exp);
+        }
+        return _results;
+      })();
+      return offset;
+    };
 
+    Model.prototype.getMorphOrder = function(buffer, view, offset) {
+      var i, length;
+      length = view.getUint8(offset);
+      offset += size_Uint8;
+      this.morph_order = (function() {
+        var _results;
+        _results = [];
+        for (i = 0; 0 <= length ? i < length : i > length; 0 <= length ? i++ : i--) {
+          _results.push(view.getUint16(offset + i * size_Uint16, true));
+        }
+        return _results;
+      })();
+      return offset += length * size_Uint16;
+    };
+
+    Model.prototype.getBoneGroupNames = function(buffer, view, offset) {
+      var block, i, length;
+      length = view.getUint8(offset);
+      offset += size_Uint8;
+      block = new Uint8Array(buffer, offset, 50 * length);
+      this.bone_group_names = (function() {
+        var _results;
+        _results = [];
+        for (i = 0; 0 <= length ? i < length : i > length; 0 <= length ? i++ : i--) {
+          _results.push(sjisArrayToString(slice.call(block, i * 50, (i + 1) * 50)));
+        }
+        return _results;
+      })();
+      return offset += length * 50 * size_Uint8;
+    };
+
+    Model.prototype.getBoneTable = function(buffer, view, offset) {
+      var bone, i, length;
+      length = view.getUint32(offset, true);
+      offset += size_Uint32;
+      this.bone_table = (function() {
+        var _results;
+        _results = [];
+        for (i = 0; 0 <= length ? i < length : i > length; 0 <= length ? i++ : i--) {
+          bone = {};
+          bone.index = view.getUint16(offset, true);
+          offset += size_Uint16;
+          bone.group_index = view.getUint8(offset);
+          offset += size_Uint8;
+          _results.push(bone);
+        }
+        return _results;
+      })();
+      return offset;
+    };
+
+    Model.prototype.getEnglishFlag = function(buffer, view, offset) {
+      this.english_flag = view.getUint8(offset);
+      return offset += size_Uint8;
+    };
+
+    Model.prototype.getEnglishName = function(buffer, view, offset) {
+      var block;
+      block = new Uint8Array(buffer, offset, 20 + 256);
+      this.english_name = sjisArrayToString(slice.call(block, 0, 20));
+      this.english_comment = sjisArrayToString(slice.call(block, 20, 20 + 256));
+      return offset += (20 + 256) * size_Uint8;
+    };
+
+    Model.prototype.getEnglishBoneNames = function(buffer, view, offset) {
+      var block, i, length;
+      length = this.bones.length;
+      block = new Uint8Array(buffer, offset, 20 * length);
+      this.english_bone_names = (function() {
+        var _results;
+        _results = [];
+        for (i = 0; 0 <= length ? i < length : i > length; 0 <= length ? i++ : i--) {
+          _results.push(sjisArrayToString(slice.call(block, i * 20, (i + 1) * 20)));
+        }
+        return _results;
+      })();
+      return offset += length * 20 * size_Uint8;
+    };
+
+    Model.prototype.getEnglishMorphNames = function(buffer, view, offset) {
+      var block, i, length;
+      length = this.morphs.length - 1;
+      block = new Uint8Array(buffer, offset, 20 * length);
+      this.english_morph_names = (function() {
+        var _results;
+        _results = [];
+        for (i = 0; 0 <= length ? i < length : i > length; 0 <= length ? i++ : i--) {
+          _results.push(sjisArrayToString(slice.call(block, i * 20, (i + 1) * 20)));
+        }
+        return _results;
+      })();
+      return offset += length * 20 * size_Uint8;
+    };
+
+    Model.prototype.getEnglishBoneGroupNames = function(buffer, view, offset) {
+      var block, i, length;
+      length = this.bone_group_names.length;
+      block = new Uint8Array(buffer, offset, 50 * length);
+      this.english_bone_group_names = (function() {
+        var _results;
+        _results = [];
+        for (i = 0; 0 <= length ? i < length : i > length; 0 <= length ? i++ : i--) {
+          _results.push(sjisArrayToString(slice.call(block, i * 50, (i + 1) * 50)));
+        }
+        return _results;
+      })();
+      return offset += length * 50 * size_Uint8;
+    };
+
+    Model.prototype.getToonFileNames = function(buffer, view, offset) {
+      var block, i;
+      block = new Uint8Array(buffer, offset, 100 * 10);
+      this.toon_file_names = (function() {
+        var _results;
+        _results = [];
+        for (i = 0; i < 10; i++) {
+          _results.push(sjisArrayToString(slice.call(block, i * 100, (i + 1) * 100)));
+        }
+        return _results;
+      })();
+      return offset += 100 * 10 * size_Uint8;
+    };
+
+    Model.prototype.getRigidBodies = function(buffer, view, offset) {
+      var i, length;
+      length = view.getUint32(offset, true);
+      offset += size_Uint32;
+      this.rigid_bodies = (function() {
+        var _results;
+        _results = [];
+        for (i = 0; 0 <= length ? i < length : i > length; 0 <= length ? i++ : i--) {
+          _results.push(new RigidBody(buffer, view, offset + i * RigidBody.size));
+        }
+        return _results;
+      })();
+      return offset += length * RigidBody.size;
+    };
+
+    Model.prototype.getJoints = function(buffer, view, offset) {
+      var i, length;
+      length = view.getUint32(offset, true);
+      offset += size_Uint32;
+      this.joints = (function() {
+        var _results;
+        _results = [];
+        for (i = 0; 0 <= length ? i < length : i > length; 0 <= length ? i++ : i--) {
+          _results.push(new Joint(buffer, view, offset + i * Joint.size));
+        }
+        return _results;
+      })();
+      return offset += length * Joint.size;
+    };
+
+    return Model;
+
+  })();
+
+  Vertex = (function() {
+
+    function Vertex(buffer, view, offset) {
+      this.x = view.getFloat32(offset, true);
+      offset += size_Float32;
+      this.y = view.getFloat32(offset, true);
+      offset += size_Float32;
+      this.z = -view.getFloat32(offset, true);
+      offset += size_Float32;
+      this.nx = view.getFloat32(offset, true);
+      offset += size_Float32;
+      this.ny = view.getFloat32(offset, true);
+      offset += size_Float32;
+      this.nz = -view.getFloat32(offset, true);
+      offset += size_Float32;
+      this.u = view.getFloat32(offset, true);
+      offset += size_Float32;
+      this.v = view.getFloat32(offset, true);
+      offset += size_Float32;
+      this.bone_num1 = view.getUint16(offset, true);
+      offset += size_Uint16;
+      this.bone_num2 = view.getUint16(offset, true);
+      offset += size_Uint16;
+      this.bone_weight = view.getUint8(offset);
+      offset += size_Uint8;
+      this.edge_flag = view.getUint8(offset);
+      offset += size_Uint8;
+    }
+
+    return Vertex;
+
+  })();
+
+  Vertex.size = size_Float32 * 8 + size_Uint16 * 2 + size_Uint8 * 2;
+
+  Material = (function() {
+
+    function Material(buffer, view, offset) {
+      var i, tmp;
+      tmp = [];
+      tmp[0] = view.getFloat32(offset, true);
+      offset += size_Float32;
+      tmp[1] = view.getFloat32(offset, true);
+      offset += size_Float32;
+      tmp[2] = view.getFloat32(offset, true);
+      offset += size_Float32;
+      this.diffuse = new Float32Array(tmp);
+      this.alpha = view.getFloat32(offset, true);
+      offset += size_Float32;
+      this.shininess = view.getFloat32(offset, true);
+      offset += size_Float32;
+      tmp[0] = view.getFloat32(offset, true);
+      offset += size_Float32;
+      tmp[1] = view.getFloat32(offset, true);
+      offset += size_Float32;
+      tmp[2] = view.getFloat32(offset, true);
+      offset += size_Float32;
+      this.specular = new Float32Array(tmp);
+      tmp[0] = view.getFloat32(offset, true);
+      offset += size_Float32;
+      tmp[1] = view.getFloat32(offset, true);
+      offset += size_Float32;
+      tmp[2] = view.getFloat32(offset, true);
+      offset += size_Float32;
+      this.ambient = new Float32Array(tmp);
+      this.toon_index = view.getInt8(offset);
+      offset += size_Int8;
+      this.edge_flag = view.getUint8(offset);
+      offset += size_Uint8;
+      this.face_vert_count = view.getUint32(offset, true);
+      offset += size_Uint32;
+      this.texture_file_name = sjisArrayToString((function() {
+        var _results;
+        _results = [];
+        for (i = 0; i < 20; i++) {
+          _results.push(view.getUint8(offset + size_Uint8 * i));
+        }
+        return _results;
+      })());
+    }
+
+    return Material;
+
+  })();
+
+  Material.size = size_Float32 * 11 + size_Uint8 * 2 + size_Uint32 + size_Uint8 * 20;
+
+  Bone = (function() {
+
+    function Bone(buffer, view, offset) {
+      var tmp;
+      this.name = sjisArrayToString(new Uint8Array(buffer, offset, 20));
+      offset += size_Uint8 * 20;
+      this.parent_bone_index = view.getUint16(offset, true);
+      offset += size_Uint16;
+      this.tail_pos_bone_index = view.getUint16(offset, true);
+      offset += size_Uint16;
+      this.type = view.getUint8(offset);
+      offset += size_Uint8;
+      this.ik_parent_bone_index = view.getUint16(offset, true);
+      offset += size_Uint16;
+      tmp = [];
+      tmp[0] = view.getFloat32(offset, true);
+      offset += size_Float32;
+      tmp[1] = view.getFloat32(offset, true);
+      offset += size_Float32;
+      tmp[2] = -view.getFloat32(offset, true);
+      offset += size_Float32;
+      this.head_pos = new Float32Array(tmp);
+    }
+
+    return Bone;
+
+  })();
+
+  Bone.size = size_Uint8 * 21 + size_Uint16 * 3 + size_Float32 * 3;
+
+  IK = (function() {
+
+    function IK(buffer, view, offset) {
+      var i;
+      this.bone_index = view.getUint16(offset, true);
+      offset += size_Uint16;
+      this.target_bone_index = view.getUint16(offset, true);
+      offset += size_Uint16;
+      this.chain_length = view.getUint8(offset);
+      offset += size_Uint8;
+      this.iterations = view.getUint16(offset, true);
+      offset += size_Uint16;
+      this.control_weight = view.getFloat32(offset, true);
+      offset += size_Float32;
+      this.child_bone_indices = (function() {
+        var _ref, _results;
+        _results = [];
+        for (i = 0, _ref = this.chain_length; 0 <= _ref ? i < _ref : i > _ref; 0 <= _ref ? i++ : i--) {
+          _results.push(view.getUint16(offset + size_Uint16 * i, true));
+        }
+        return _results;
+      }).call(this);
+    }
+
+    IK.prototype.getSize = function() {
+      return size_Uint16 * 3 + size_Uint8 + size_Float32 + size_Uint16 * this.chain_length;
+    };
+
+    return IK;
+
+  })();
+
+  Morph = (function() {
+
+    function Morph(buffer, view, offset) {
+      var data, i;
+      this.name = sjisArrayToString(new Uint8Array(buffer, offset, 20));
+      offset += size_Uint8 * 20;
+      this.vert_count = view.getUint32(offset, true);
+      offset += size_Uint32;
+      this.type = view.getUint8(offset);
+      offset += size_Uint8;
+      this.vert_data = (function() {
+        var _ref, _results;
+        _results = [];
+        for (i = 0, _ref = this.vert_count; 0 <= _ref ? i < _ref : i > _ref; 0 <= _ref ? i++ : i--) {
+          data = {};
+          data.index = view.getUint32(offset, true);
+          offset += size_Uint32;
+          data.x = view.getFloat32(offset, true);
+          offset += size_Float32;
+          data.y = view.getFloat32(offset, true);
+          offset += size_Float32;
+          data.z = -view.getFloat32(offset, true);
+          offset += size_Float32;
+          _results.push(data);
+        }
+        return _results;
+      }).call(this);
+    }
+
+    Morph.prototype.getSize = function() {
+      return size_Uint8 * 21 + size_Uint32 + (size_Uint32 + size_Float32 * 3) * this.vert_count;
+    };
+
+    return Morph;
+
+  })();
+
+  RigidBody = (function() {
+
+    function RigidBody(buffer, view, offset) {
+      var tmp;
+      this.name = sjisArrayToString(new Uint8Array(buffer, offset, 20));
+      offset += size_Uint8 * 20;
+      this.rel_bone_index = view.getUint16(offset, true);
+      offset += size_Uint16;
+      this.group_index = view.getUint8(offset);
+      offset += size_Uint8;
+      this.group_target = view.getUint8(offset);
+      offset += size_Uint8;
+      this.shape_type = view.getUint8(offset, true);
+      offset += size_Uint8;
+      this.shape_w = view.getFloat32(offset, true);
+      offset += size_Float32;
+      this.shape_h = view.getFloat32(offset, true);
+      offset += size_Float32;
+      this.shape_d = view.getFloat32(offset, true);
+      offset += size_Float32;
+      tmp = [];
+      tmp[0] = view.getFloat32(offset, true);
+      offset += size_Float32;
+      tmp[1] = view.getFloat32(offset, true);
+      offset += size_Float32;
+      tmp[2] = -view.getFloat32(offset, true);
+      offset += size_Float32;
+      this.pos = new Float32Array(tmp);
+      tmp[0] = -view.getFloat32(offset, true);
+      offset += size_Float32;
+      tmp[1] = -view.getFloat32(offset, true);
+      offset += size_Float32;
+      tmp[2] = view.getFloat32(offset, true);
+      offset += size_Float32;
+      this.rot = new Float32Array(tmp);
+      this.weight = view.getFloat32(offset, true);
+      offset += size_Float32;
+      this.pos_dim = view.getFloat32(offset, true);
+      offset += size_Float32;
+      this.rot_dim = view.getFloat32(offset, true);
+      offset += size_Float32;
+      this.recoil = view.getFloat32(offset, true);
+      offset += size_Float32;
+      this.friction = view.getFloat32(offset, true);
+      offset += size_Float32;
+      this.type = view.getUint8(offset);
+      offset += size_Uint8;
+    }
+
+    return RigidBody;
+
+  })();
+
+  RigidBody.size = size_Uint8 * 23 + size_Uint16 * 2 + size_Float32 * 14;
+
+  Joint = (function() {
+
+    function Joint(buffer, view, offset) {
+      var tmp;
+      this.name = sjisArrayToString(new Uint8Array(buffer, offset, 20));
+      offset += size_Uint8 * 20;
+      this.rigidbody_a = view.getUint32(offset, true);
+      offset += size_Uint32;
+      this.rigidbody_b = view.getUint32(offset, true);
+      offset += size_Uint32;
+      tmp = [];
+      tmp[0] = view.getFloat32(offset, true);
+      offset += size_Float32;
+      tmp[1] = view.getFloat32(offset, true);
+      offset += size_Float32;
+      tmp[2] = -view.getFloat32(offset, true);
+      offset += size_Float32;
+      this.pos = new Float32Array(tmp);
+      tmp[0] = -view.getFloat32(offset, true);
+      offset += size_Float32;
+      tmp[1] = -view.getFloat32(offset, true);
+      offset += size_Float32;
+      tmp[2] = view.getFloat32(offset, true);
+      offset += size_Float32;
+      this.rot = new Float32Array(tmp);
+      tmp[0] = view.getFloat32(offset, true);
+      offset += size_Float32;
+      tmp[1] = view.getFloat32(offset, true);
+      offset += size_Float32;
+      tmp[2] = -view.getFloat32(offset, true);
+      offset += size_Float32;
+      this.constrain_pos_1 = new Float32Array(tmp);
+      tmp[0] = view.getFloat32(offset, true);
+      offset += size_Float32;
+      tmp[1] = view.getFloat32(offset, true);
+      offset += size_Float32;
+      tmp[2] = -view.getFloat32(offset, true);
+      offset += size_Float32;
+      this.constrain_pos_2 = new Float32Array(tmp);
+      tmp[0] = -view.getFloat32(offset, true);
+      offset += size_Float32;
+      tmp[1] = -view.getFloat32(offset, true);
+      offset += size_Float32;
+      tmp[2] = view.getFloat32(offset, true);
+      offset += size_Float32;
+      this.constrain_rot_1 = new Float32Array(tmp);
+      tmp[0] = -view.getFloat32(offset, true);
+      offset += size_Float32;
+      tmp[1] = -view.getFloat32(offset, true);
+      offset += size_Float32;
+      tmp[2] = view.getFloat32(offset, true);
+      offset += size_Float32;
+      this.constrain_rot_2 = new Float32Array(tmp);
+      tmp[0] = view.getFloat32(offset, true);
+      offset += size_Float32;
+      tmp[1] = view.getFloat32(offset, true);
+      offset += size_Float32;
+      tmp[2] = -view.getFloat32(offset, true);
+      offset += size_Float32;
+      this.spring_pos = new Float32Array(tmp);
+      tmp[0] = -view.getFloat32(offset, true);
+      offset += size_Float32;
+      tmp[1] = -view.getFloat32(offset, true);
+      offset += size_Float32;
+      tmp[2] = view.getFloat32(offset, true);
+      offset += size_Float32;
+      this.spring_rot = new Float32Array(tmp);
+    }
+
+    return Joint;
+
+  })();
+
+  Joint.size = size_Int8 * 20 + size_Uint32 * 2 + size_Float32 * 24;
+
+}).call(this);

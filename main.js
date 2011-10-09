@@ -143,7 +143,7 @@ MMDGL.prototype.initVertices = function initVertices() {
 MMDGL.prototype.initIndices = function initIndices() {
   var gl = this.gl;
 
-  var indices = this.model.faceVerts;
+  var indices = this.model.triangles;
 
   this.ibuffer = gl.createBuffer();
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.ibuffer);
@@ -607,7 +607,7 @@ MMDGL.ShadowMap = function ShadowMap(mmdgl) {
   this.program = mmdgl.program;
   this.framebuffer = this.texture = null;
   this.width = this.height = 2048;
-  this.faceVertsLength = mmdgl.model.faceVerts.length;
+  this.trianglesLength = mmdgl.model.triangles.length;
   this.viewBroadness = 0.6;
   this.debug = false;
 
@@ -679,7 +679,7 @@ MMDGL.ShadowMap.prototype.render = function render() {
   gl.uniformMatrix4fv(program.uMVMatrix, false, this.mvMatrix);
   gl.uniformMatrix4fv(program.uPMatrix, false, this.pMatrix);
 
-  gl.drawElements(gl.TRIANGLES, this.faceVertsLength, gl.UNSIGNED_SHORT, 0);
+  gl.drawElements(gl.TRIANGLES, this.trianglesLength, gl.UNSIGNED_SHORT, 0);
 
   gl.uniform1i(program.uGenerateShadowMap, false);
 
