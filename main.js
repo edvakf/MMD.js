@@ -1,7 +1,8 @@
 window.onload = function() {
+  var size = 512
   var canvas = document.createElement('canvas');
-  canvas.width = 500;
-  canvas.height = 500;
+  canvas.width = size;
+  canvas.height = size;
   canvas.style.border = 'solid black 1px';
 
   document.body.appendChild(canvas);
