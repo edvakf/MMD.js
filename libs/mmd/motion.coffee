@@ -164,9 +164,9 @@ class LightMotion
     tmp[2] = view.getFloat32(offset, true); offset += size_Float32
     @color = new Float32Array(tmp)
     tmp = []
-    tmp[0] = view.getFloat32(offset, true); offset += size_Float32
-    tmp[1] = view.getFloat32(offset, true); offset += size_Float32
-    tmp[2] = - view.getFloat32(offset, true); offset += size_Float32 # left->right handed system
+    tmp[0] = - view.getFloat32(offset, true); offset += size_Float32
+    tmp[1] = - view.getFloat32(offset, true); offset += size_Float32
+    tmp[2] = view.getFloat32(offset, true); offset += size_Float32 # left->right handed system
     @location = new Float32Array(tmp)
 
 LightMotion.size = size_Float32 * 6 + size_Uint32

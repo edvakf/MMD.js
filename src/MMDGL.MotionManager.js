@@ -10,13 +10,15 @@
       this.camera = null;
       this.cameraFrames = null;
       this.light = null;
+      this.lightFrames = null;
       this.lastFrame = 0;
       return;
     }
 
     MotionManager.prototype.addMotion = function(motion) {
       this.addMorphMotion(motion);
-      return this.addCameraMotoin(motion);
+      this.addCameraMotoin(motion);
+      return this.addLightMotoin(motion);
     };
 
     MotionManager.prototype.addMorphMotion = function(motion) {
@@ -37,26 +39,45 @@
     };
 
     MotionManager.prototype.addCameraMotoin = function(motion) {
-      var c, _i, _len, _ref;
+      var c, frames, _i, _len, _ref;
       if (motion.camera.length === 0) return;
       this.camera = [];
-      this.cameraFrames = [];
+      frames = [];
       _ref = motion.camera;
       for (_i = 0, _len = _ref.length; _i < _len; _i++) {
         c = _ref[_i];
         this.camera[c.frame] = c;
-        this.cameraFrames.push(c.frame);
+        frames.push(c.frame);
         if (this.lastFrame < c.frame) this.lastFrame = c.frame;
       }
-      this.cameraFrames = this.cameraFrames.sort(function(a, b) {
+      this.cameraFrames = frames.sort(function(a, b) {
         return a - b;
       });
+    };
+
+    MotionManager.prototype.addLightMotoin = function(motion) {
+      var frames, l, _i, _len, _ref;
+      if (motion.light.length === 0) return;
+      this.light = [];
+      frames = [];
+      _ref = motion.light;
+      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+        l = _ref[_i];
+        this.light[l.frame] = l;
+        frames.push(l.frame);
+        if (this.lastFrame < l.frame) this.lastFrame = l.frame;
+      }
+      this.lightFrames = frames.sort(function(a, b) {
+        return a - b;
+      });
+      console.log(this.light);
     };
 
     MotionManager.prototype.getFrame = function(frame) {
       return {
         morphs: this.getMorphFrame(frame),
-        camera: this.getCameraFrame(frame)
+        camera: this.getCameraFrame(frame),
+        light: this.getLightFrame(frame)
       };
     };
 
@@ -110,6 +131,25 @@
         };
       }
       return camera;
+    };
+
+    MotionManager.prototype.getLightFrame = function(frame) {
+      var frames, idx, lastFrame, light, n, p, timeline;
+      timeline = this.light;
+      frames = this.lightFrames;
+      lastFrame = frames[frames.length - 1];
+      if (lastFrame <= frame) {
+        light = timeline[lastFrame];
+      } else {
+        idx = previousRegisteredFrame(frames, frame);
+        p = frames[idx];
+        n = frames[idx + 1];
+        light = {
+          color: [interpolateLinear(p, n, timeline[p].color[0], timeline[n].color[0], frame), interpolateLinear(p, n, timeline[p].color[1], timeline[n].color[1], frame), interpolateLinear(p, n, timeline[p].color[2], timeline[n].color[2], frame)],
+          location: [interpolateLinear(p, n, timeline[p].location[0], timeline[n].location[0], frame), interpolateLinear(p, n, timeline[p].location[1], timeline[n].location[1], frame), interpolateLinear(p, n, timeline[p].location[2], timeline[n].location[2], frame)]
+        };
+      }
+      return light;
     };
 
     return MotionManager;

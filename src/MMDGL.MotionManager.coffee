@@ -6,12 +6,14 @@ class MMDGL.MotionManager
     @camera = null
     @cameraFrames = null
     @light = null
+    @lightFrames = null
     @lastFrame = 0
     return
 
   addMotion: (motion) ->
     @addMorphMotion(motion)
     @addCameraMotoin(motion)
+    @addLightMotoin(motion)
 
   addMorphMotion: (motion) ->
     for m in motion.morph
@@ -28,18 +30,31 @@ class MMDGL.MotionManager
   addCameraMotoin: (motion) ->
     return if motion.camera.length == 0
     @camera = []
-    @cameraFrames = []
+    frames = []
     for c in motion.camera
       @camera[c.frame] = c
-      @cameraFrames.push(c.frame)
+      frames.push(c.frame)
       @lastFrame = c.frame if @lastFrame < c.frame
-    @cameraFrames = @cameraFrames.sort((a, b) -> a - b)
+    @cameraFrames = frames.sort((a, b) -> a - b)
+    return
+
+  addLightMotoin: (motion) ->
+    return if motion.light.length == 0
+    @light = []
+    frames = []
+    for l in motion.light
+      @light[l.frame] = l
+      frames.push(l.frame)
+      @lastFrame = l.frame if @lastFrame < l.frame
+    @lightFrames = frames.sort((a, b) -> a - b)
+    console.log @light
     return
 
   getFrame: (frame) ->
     return {
       morphs: @getMorphFrame(frame)
       camera: @getCameraFrame(frame)
+      light: @getLightFrame(frame)
     }
 
   getMorphFrame: (frame) ->
@@ -97,6 +112,31 @@ class MMDGL.MotionManager
       }
 
     return camera
+
+  getLightFrame: (frame) ->
+    timeline = @light
+    frames = @lightFrames
+    lastFrame = frames[frames.length - 1]
+    if lastFrame <= frame
+      light = timeline[lastFrame]
+    else
+      idx = previousRegisteredFrame(frames, frame)
+      p = frames[idx]
+      n = frames[idx + 1]
+      light = {
+        color: [
+          interpolateLinear(p, n, timeline[p].color[0], timeline[n].color[0], frame)
+          interpolateLinear(p, n, timeline[p].color[1], timeline[n].color[1], frame)
+          interpolateLinear(p, n, timeline[p].color[2], timeline[n].color[2], frame)
+        ]
+        location: [
+          interpolateLinear(p, n, timeline[p].location[0], timeline[n].location[0], frame)
+          interpolateLinear(p, n, timeline[p].location[1], timeline[n].location[1], frame)
+          interpolateLinear(p, n, timeline[p].location[2], timeline[n].location[2], frame)
+        ]
+      }
+
+    return light
 
 # utils
 previousRegisteredFrame = (frames, frame) ->
