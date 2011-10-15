@@ -164,7 +164,7 @@
         tmp[i] = view.getUint8(offset, true);
         offset += size_Uint8;
       }
-      this.interpolation = new Float32Array(tmp);
+      this.interpolation = new Uint8Array(tmp);
     }
 
     return BoneMotion;
@@ -196,7 +196,7 @@
       var i, tmp;
       this.frame = view.getUint32(offset, true);
       offset += size_Uint32;
-      this.distance = view.getFloat32(offset, true);
+      this.distance = -view.getFloat32(offset, true);
       offset += size_Float32;
       tmp = [];
       tmp[0] = view.getFloat32(offset, true);
@@ -217,7 +217,7 @@
         tmp[i] = view.getUint8(offset, true);
         offset += size_Uint8;
       }
-      this.interpolation = new Float32Array(tmp);
+      this.interpolation = new Uint8Array(tmp);
       this.view_angle = view.getUint32(offset, true);
       offset += size_Uint32;
       this.noPerspective = view.getUint8(offset, true);

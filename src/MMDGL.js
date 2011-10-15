@@ -206,12 +206,17 @@
     };
 
     MMDGL.prototype.move = function() {
-      var b, base, bones, i, model, morph, morphs, name, vert, weight, _i, _j, _len, _len2, _ref, _ref2, _ref3;
+      var b, base, bones, camera, i, model, morph, morphs, name, vert, weight, _i, _j, _len, _len2, _ref, _ref2, _ref3;
       if (!this.playing) return;
       this.frame++;
       model = this.model;
+      _ref = this.motionManager.getFrame(this.frame), bones = _ref.bones, morphs = _ref.morphs, camera = _ref.camera;
+      this.distance = camera.distance;
+      this.rotx = camera.rotation[0];
+      this.roty = camera.rotation[1];
+      this.center = vec3.create(camera.location);
+      this.fovy = camera.view_angle;
       base = model.morphsDict['base'];
-      _ref = this.motionManager.getFrame(this.frame), morphs = _ref.morphs, bones = _ref.bones;
       for (name in morphs) {
         weight = morphs[name];
         morph = model.morphsDict[name];

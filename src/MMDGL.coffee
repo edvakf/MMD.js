@@ -158,8 +158,15 @@ class this.MMDGL
     @frame++
     model = @model
 
+    {bones, morphs, camera} = @motionManager.getFrame(@frame)
+
+    @distance = camera.distance
+    @rotx = camera.rotation[0]
+    @roty = camera.rotation[1]
+    @center = vec3.create(camera.location)
+    @fovy = camera.view_angle
+
     base = model.morphsDict['base']
-    {morphs, bones} = @motionManager.getFrame(@frame)
     for name of morphs
       weight = morphs[name]
       morph = model.morphsDict[name]

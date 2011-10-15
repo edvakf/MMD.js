@@ -18,10 +18,15 @@ window.onload = function() {
     mmd.initBuffers();
     mmd.start();
 
-    var motion = new Motion('motion/smile.vmd');
-    motion.load(function() {
-      mmd.addMotion(motion);
-      mmd.play();
+    var smile = new Motion('motion/smile.vmd');
+    smile.load(function() {
+      mmd.addMotion(smile);
+
+      var camera = new Motion('motion/zoom_in.vmd');
+      camera.load(function() {
+        mmd.addMotion(camera);
+        mmd.play();
+      });
     });
   });
 };

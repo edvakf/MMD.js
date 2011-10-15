@@ -1,18 +1,22 @@
 (function() {
+  var interpolateBezier, interpolateLinear, previousRegisteredFrame;
 
   MMDGL.MotionManager = (function() {
 
     function MotionManager() {
       this.bones = {};
       this.morphs = {};
+      this.morphFrames = {};
       this.camera = null;
+      this.cameraFrames = null;
       this.light = null;
       this.lastFrame = 0;
       return;
     }
 
     MotionManager.prototype.addMotion = function(motion) {
-      return this.addMorphMotion(motion);
+      this.addMorphMotion(motion);
+      return this.addCameraMotoin(motion);
     };
 
     MotionManager.prototype.addMorphMotion = function(motion) {
@@ -26,50 +30,150 @@
         if (this.lastFrame < m.frame) this.lastFrame = m.frame;
       }
       for (name in this.morphs) {
-        this.morphs[name].frames = Object.keys(this.morphs[name]).map(Number).sort(function(a, b) {
+        this.morphFrames[name] = Object.keys(this.morphs[name]).map(Number).sort(function(a, b) {
           return a - b;
         });
       }
     };
 
+    MotionManager.prototype.addCameraMotoin = function(motion) {
+      var c, _i, _len, _ref;
+      if (motion.camera.length === 0) return;
+      this.camera = [];
+      this.cameraFrames = [];
+      _ref = motion.camera;
+      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+        c = _ref[_i];
+        this.camera[c.frame] = c;
+        this.cameraFrames.push(c.frame);
+        if (this.lastFrame < c.frame) this.lastFrame = c.frame;
+      }
+      this.cameraFrames = this.cameraFrames.sort(function(a, b) {
+        return a - b;
+      });
+    };
+
     MotionManager.prototype.getFrame = function(frame) {
       return {
-        morphs: this.getMorphFrame(frame)
+        morphs: this.getMorphFrame(frame),
+        camera: this.getCameraFrame(frame)
       };
     };
 
     MotionManager.prototype.getMorphFrame = function(frame) {
-      var delta, frames, idx, lastFrame, morphs, n, name, p, timeline;
+      var frames, idx, lastFrame, morphs, n, name, p, timeline;
       morphs = {};
       for (name in this.morphs) {
         timeline = this.morphs[name];
-        frames = timeline.frames;
+        frames = this.morphFrames[name];
         lastFrame = frames[frames.length - 1];
         if (lastFrame <= frame) {
           morphs[name] = timeline[lastFrame];
         } else {
-          idx = 0;
-          delta = frames.length;
-          while (true) {
-            delta = (delta >> 1) || 1;
-            if (frames[idx] <= frame) {
-              if (delta === 1 && frames[idx + 1] > frame) break;
-              idx += delta;
-            } else {
-              idx -= delta;
-              if (delta === 1 && frames[idx] <= frame) break;
-            }
-          }
+          idx = previousRegisteredFrame(frames, frame);
           p = frames[idx];
           n = frames[idx + 1];
-          morphs[name] = (timeline[n] * (frame - p) + timeline[p] * (n - frame)) / (n - p);
+          morphs[name] = interpolateLinear(p, n, timeline[p], timeline[n], frame);
         }
       }
       return morphs;
     };
 
+    MotionManager.prototype.getCameraFrame = function(frame) {
+      var cache, camera, frames, idx, interpolated_x, lastFrame, n, next, p, prev, timeline;
+      timeline = this.camera;
+      frames = this.cameraFrames;
+      lastFrame = frames[frames.length - 1];
+      if (lastFrame <= frame) {
+        camera = timeline[lastFrame];
+      } else {
+        idx = previousRegisteredFrame(frames, frame);
+        p = frames[idx];
+        n = frames[idx + 1];
+        prev = timeline[p];
+        next = timeline[n];
+        cache = [];
+        interpolated_x = function(i) {
+          var X1, X2, Y1, Y2, a, id, _ref;
+          _ref = Array.prototype.slice.call(next.interpolation, i * 4, i * 4 + 4), X1 = _ref[0], X2 = _ref[1], Y1 = _ref[2], Y2 = _ref[3];
+          id = X1 | (X2 << 8) | (Y1 << 16) | (Y2 << 24);
+          if (cache[id] != null) return cache[id];
+          if (X1 === Y1 && X2 === Y2) return cache[id] = frame;
+          a = interpolateBezier(X1 / 127, X2 / 127, Y1 / 127, Y2 / 127, (frame - p) / (n - p));
+          return cache[id] = p + (n - p) * a;
+        };
+        camera = {
+          location: [interpolateLinear(p, n, prev.location[0], next.location[0], interpolated_x(0)), interpolateLinear(p, n, prev.location[1], next.location[1], interpolated_x(1)), interpolateLinear(p, n, prev.location[2], next.location[2], interpolated_x(2))],
+          rotation: [interpolateLinear(p, n, prev.rotation[0], next.rotation[0], interpolated_x(3)), interpolateLinear(p, n, prev.rotation[1], next.rotation[1], interpolated_x(3)), interpolateLinear(p, n, prev.rotation[2], next.rotation[2], interpolated_x(3))],
+          distance: interpolateLinear(p, n, prev.distance, next.distance, interpolated_x(4)),
+          view_angle: interpolateLinear(p, n, prev.view_angle, next.view_angle, interpolated_x(5))
+        };
+      }
+      return camera;
+    };
+
     return MotionManager;
 
   })();
+
+  previousRegisteredFrame = function(frames, frame) {
+    /*
+        'frames' is key frames registered, 'frame' is the key frame I'm enquiring about
+        ex. frames: [0,10,20,30,40,50], frame: 15
+        now I want to find the numbers 10 and 20, namely the ones before 15 and after 15
+        I'm doing a bisection search here.
+    */
+    var delta, idx;
+    idx = 0;
+    delta = frames.length;
+    while (true) {
+      delta = (delta >> 1) || 1;
+      if (frames[idx] <= frame) {
+        if (delta === 1 && frames[idx + 1] > frame) break;
+        idx += delta;
+      } else {
+        idx -= delta;
+        if (delta === 1 && frames[idx] <= frame) break;
+      }
+    }
+    return idx;
+  };
+
+  interpolateBezier = function(x1, x2, y1, y2, x) {
+    /*
+        interpolate using Bezier curve (http://musashi.or.tv/fontguide_doc3.htm)
+        Bezier curve is parametrized by t (0 <= t <= 1)
+          x = s^3 x_0 + 3 s^2 t x_1 + 3 s t^2 x_2 + t^3 x_3
+          y = s^3 y_0 + 3 s^2 t y_1 + 3 s t^2 y_2 + t^3 y_3
+        where s is defined as s = 1 - t.
+        Especially, for MMD, (x_0, y_0) = (0, 0) and (x_3, y_3) = (1, 1), so
+          x = 3 s^2 t x_1 + 3 s t^2 x_2 + t^3
+          y = 3 s^2 t y_1 + 3 s t^2 y_2 + t^3
+        Now, given x, find t by bisection method (http://en.wikipedia.org/wiki/Bisection_method)
+        i.e. find t such that f(t) = 3 s^2 t x_1 + 3 s t^2 x_2 + t^3 - x = 0
+        One thing to note here is that f(t) is monotonically increasing in the range [0,1]
+        Therefore, when I calculate f(t) for the t I guessed,
+        if f(t) < 0 then increase t slightly, and if f(t) > 0 then decrease t slightly.
+        The level of precision I need is about 1/2^16, so I repeat 15 times
+        Finally find y for the t.
+    */
+    var ft, i, s, t;
+    t = s = 0.5;
+    for (i = 0; i < 15; i++) {
+      ft = (3 * s * s * t * x1) + (3 * s * t * t * x2) + (t * t * t) - x;
+      if (ft === 0) break;
+      if (ft > 0) {
+        t -= 1 / (4 << i);
+      } else {
+        t += 1 / (4 << i);
+      }
+      s = 1 - t;
+    }
+    return (3 * s * s * t * y1) + (3 * s * t * t * y2) + (t * t * t);
+  };
+
+  interpolateLinear = function(x1, x2, y1, y2, x) {
+    return (y2 * (x - x1) + y1 * (x2 - x)) / (x2 - x1);
+  };
 
 }).call(this);

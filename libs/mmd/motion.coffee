@@ -108,7 +108,7 @@ class BoneMotion
     @rotation = new Float32Array(tmp)
     for i in [0...64]
       tmp[i] = view.getUint8(offset, true); offset += size_Uint8
-    @interpolation = new Float32Array(tmp)
+    @interpolation = new Uint8Array(tmp)
 
 BoneMotion.size = size_Uint8 * (15 + 64) + size_Uint32 + size_Float32 * 7
 
@@ -134,7 +134,7 @@ MorphMotion.size = size_Uint8 * 15 + size_Uint32 + size_Float32
 class CameraMotion
   constructor: (buffer, view, offset) ->
     @frame = view.getUint32(offset, true); offset += size_Uint32
-    @distance = view.getFloat32(offset, true); offset += size_Float32
+    @distance = - view.getFloat32(offset, true); offset += size_Float32
     tmp = []
     tmp[0] = view.getFloat32(offset, true); offset += size_Float32
     tmp[1] = view.getFloat32(offset, true); offset += size_Float32
@@ -146,7 +146,7 @@ class CameraMotion
     @rotation = new Float32Array(tmp)
     for i in [0...24]
       tmp[i] = view.getUint8(offset, true); offset += size_Uint8
-    @interpolation = new Float32Array(tmp)
+    @interpolation = new Uint8Array(tmp)
     @view_angle = view.getUint32(offset, true); offset += size_Uint32
     @noPerspective = view.getUint8(offset, true); offset += size_Uint8
 
