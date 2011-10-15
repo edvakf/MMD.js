@@ -47,7 +47,6 @@ class MMDGL.MotionManager
       frames.push(l.frame)
       @lastFrame = l.frame if @lastFrame < l.frame
     @lightFrames = frames.sort((a, b) -> a - b)
-    console.log @light
     return
 
   getFrame: (frame) ->

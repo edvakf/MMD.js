@@ -368,6 +368,7 @@ class this.MMDGL
 
   registerKeyListener: ->
     document.addEventListener('keydown', (e) =>
+      return if @playing
       switch e.keyCode + e.shiftKey * 1000 + e.ctrlKey * 10000 + e.altKey * 100000
         when 37 then @roty += Math.PI / 12 # left
         when 39 then @roty -= Math.PI / 12 # right
@@ -405,6 +406,7 @@ class this.MMDGL
   registerMouseListener: ->
     #drag
     document.addEventListener('mousedown', (e) =>
+      return if @playing
       return if e.button != 0
       modifier = e.shiftKey * 1000 + e.ctrlKey * 10000 + e.altKey * 100000
       return if modifier != 0 and modifier != 1000
@@ -444,6 +446,7 @@ class this.MMDGL
 
     #wheel
     document.addEventListener('mousewheel', (e) =>
+      return if @playing
       delta = e.detail || e.wheelDelta / (-40) # positive: wheel down
       @distance += delta * @distance / @DIST
       e.preventDefault()

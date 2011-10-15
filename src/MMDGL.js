@@ -396,6 +396,7 @@
     MMDGL.prototype.registerKeyListener = function() {
       var _this = this;
       document.addEventListener('keydown', function(e) {
+        if (_this.playing) return;
         switch (e.keyCode + e.shiftKey * 1000 + e.ctrlKey * 10000 + e.altKey * 100000) {
           case 37:
             _this.roty += Math.PI / 12;
@@ -452,6 +453,7 @@
       var _this = this;
       document.addEventListener('mousedown', function(e) {
         var modifier, move, onmousemove, onmouseup, ox, oy;
+        if (_this.playing) return;
         if (e.button !== 0) return;
         modifier = e.shiftKey * 1000 + e.ctrlKey * 10000 + e.altKey * 100000;
         if (modifier !== 0 && modifier !== 1000) return;
@@ -495,6 +497,7 @@
       }, false);
       document.addEventListener('mousewheel', function(e) {
         var delta;
+        if (_this.playing) return;
         delta = e.detail || e.wheelDelta / (-40);
         _this.distance += delta * _this.distance / _this.DIST;
         return e.preventDefault();

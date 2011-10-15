@@ -70,7 +70,6 @@
       this.lightFrames = frames.sort(function(a, b) {
         return a - b;
       });
-      console.log(this.light);
     };
 
     MotionManager.prototype.getFrame = function(frame) {
