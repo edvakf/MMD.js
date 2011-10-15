@@ -139,7 +139,7 @@
 
     function BoneMotion(buffer, view, offset) {
       var i, tmp;
-      this.bone_name = sjisArrayToString(new Uint8Array(buffer, offset, 15));
+      this.name = sjisArrayToString(new Uint8Array(buffer, offset, 15));
       offset += size_Uint8 * 15;
       this.frame = view.getUint32(offset, true);
       offset += size_Uint32;
@@ -176,7 +176,7 @@
   MorphMotion = (function() {
 
     function MorphMotion(buffer, view, offset) {
-      this.morph_name = sjisArrayToString(new Uint8Array(buffer, offset, 15));
+      this.name = sjisArrayToString(new Uint8Array(buffer, offset, 15));
       offset += size_Uint8 * 15;
       this.frame = view.getUint32(offset, true);
       offset += size_Uint32;

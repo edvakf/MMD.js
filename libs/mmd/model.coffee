@@ -18,6 +18,7 @@ class this.Model # export to top level
     @materials = null
     @bones = null
     @morphs = null
+    @morphsDict = null
     @morph_order = null
     @bone_group_names = null
     @bone_table = null
@@ -134,11 +135,13 @@ class this.Model # export to top level
   getMorphs: (buffer, view, offset) ->
     length = view.getUint16(offset, true)
     offset += size_Uint16
+    @morphsDict = {}
     @morphs =
       for i in [0...length]
-        exp = new Morph(buffer, view, offset)
-        offset += exp.getSize()
-        exp
+        morph = new Morph(buffer, view, offset)
+        @morphsDict[morph.name] = morph
+        offset += morph.getSize()
+        morph
     offset
 
   getMorphOrder: (buffer, view, offset) ->

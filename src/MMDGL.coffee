@@ -79,6 +79,7 @@ class this.MMDGL
       uvs[2 * i    ] = vertex.u
       uvs[2 * i + 1] = vertex.v
       edge[i] = 1 - vertex.edge_flag
+    model.positions = positions
 
     @vbuffers =
       for data in [
@@ -135,16 +136,53 @@ class this.MMDGL
     @registerMouseListener()
 
     @shadowMap = new MMDGL.ShadowMap(this) if @drawSelfShadow
+    @motionManager = new MMDGL.MotionManager
 
     t0 = Date.now()
     step = =>
+      @move()
       @computeMatrices()
       @render()
       t1 = Date.now()
-      setTimeout(step, Math.max(0, @fps - (t1 - t0)))
+      #idealInterval = 1000 / @fps
+      #delay = (t1 - t0) - idealInterval
+      #interval = idealInterval - delay # == 1000 / @fps * 2 - (t1 - t0)
+      setTimeout(step, Math.max(0, 1000 / @fps * 2 - (t1 - t0)))
       t0 = t1
 
     step()
+    return
+
+  move: ->
+    return if not @playing
+    @frame++
+    model = @model
+
+    base = model.morphsDict['base']
+    {morphs, bones} = @motionManager.getFrame(@frame)
+    for name of morphs
+      weight = morphs[name]
+      morph = model.morphsDict[name]
+      continue if not morph
+      for vert in morph.vert_data
+        b = base.vert_data[vert.index]
+        i = b.index
+        model.positions[3 * i    ] += vert.x * weight
+        model.positions[3 * i + 1] += vert.y * weight
+        model.positions[3 * i + 2] += vert.z * weight
+
+    @gl.bindBuffer(@gl.ARRAY_BUFFER, @vbuffers[0].buffer)
+    @gl.bufferData(@gl.ARRAY_BUFFER, model.positions, @gl.STATIC_DRAW)
+    @gl.bindBuffer(@gl.ARRAY_BUFFER, null)
+
+    # reset positions
+    for b in base.vert_data
+      i = b.index
+      model.positions[3 * i    ] = b.x
+      model.positions[3 * i + 1] = b.y
+      model.positions[3 * i + 2] = b.z
+
+    @pause() if @frame > @motionManager.lastFrame
     return
 
   computeMatrices: ->
@@ -171,7 +209,7 @@ class this.MMDGL
     return
 
   render: ->
-    return if not @redraw
+    return if not @redraw and not @playing
     @redraw = false
 
     @gl.bindFramebuffer(@gl.FRAMEBUFFER, null)
@@ -189,7 +227,7 @@ class this.MMDGL
     @setUniforms()
 
     offset = 0
-    for material in @model.materials
+    for material,i in @model.materials
       @renderMaterial(material, offset)
       @renderEdge(material, offset)
       # offset is in bytes (size of unsigned short = 2)
@@ -417,12 +455,35 @@ class this.MMDGL
     # light
     @lightDirection = [0.5, 1.0, 0.5]
     @lightDistance = 8875
-    @lightColor = [154 / 255, 154 / 255, 154 / 255]
+    @lightColor = [0.6, 0.6, 0.6]
 
     # misc
     @drawSelfShadow = true
     @drawAxes = true
     @drawCenterPoint = true
 
-    @fps = 30 # redraw every 30 msec
+    @fps = 30 # redraw every 1000/30 msec
+    @playing = false
+    @frame = -1
     return
+
+  addMotion: (motion) ->
+    @motionManager.addMotion(motion)
+    return
+
+  play: ->
+    @playing = true
+    return
+
+  pause: ->
+    @playing = false
+    return
+
+  rewind: ->
+    @setFrameNumber(-1)
+    return
+
+  setFrameNumber: (num) ->
+    @frame = num
+    return
+

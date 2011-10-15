@@ -23,6 +23,7 @@
       this.materials = null;
       this.bones = null;
       this.morphs = null;
+      this.morphsDict = null;
       this.morph_order = null;
       this.bone_group_names = null;
       this.bone_table = null;
@@ -172,19 +173,21 @@
     };
 
     Model.prototype.getMorphs = function(buffer, view, offset) {
-      var exp, i, length;
+      var i, length, morph;
       length = view.getUint16(offset, true);
       offset += size_Uint16;
+      this.morphsDict = {};
       this.morphs = (function() {
         var _results;
         _results = [];
         for (i = 0; 0 <= length ? i < length : i > length; 0 <= length ? i++ : i--) {
-          exp = new Morph(buffer, view, offset);
-          offset += exp.getSize();
-          _results.push(exp);
+          morph = new Morph(buffer, view, offset);
+          this.morphsDict[morph.name] = morph;
+          offset += morph.getSize();
+          _results.push(morph);
         }
         return _results;
-      })();
+      }).call(this);
       return offset;
     };
 

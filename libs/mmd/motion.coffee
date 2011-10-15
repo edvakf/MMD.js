@@ -93,7 +93,7 @@ class this.Motion # export to top level
 #BYTE Interpolation[64]; // [4][4][4]
 class BoneMotion
   constructor: (buffer, view, offset) ->
-    @bone_name = sjisArrayToString(new Uint8Array(buffer, offset, 15))
+    @name = sjisArrayToString(new Uint8Array(buffer, offset, 15))
     offset += size_Uint8 * 15
     @frame = view.getUint32(offset, true); offset += size_Uint32
     tmp = []
@@ -117,7 +117,7 @@ BoneMotion.size = size_Uint8 * (15 + 64) + size_Uint32 + size_Float32 * 7
 #float Weight;
 class MorphMotion
   constructor: (buffer, view, offset) ->
-    @morph_name = sjisArrayToString(new Uint8Array(buffer, offset, 15))
+    @name = sjisArrayToString(new Uint8Array(buffer, offset, 15))
     offset += size_Uint8 * 15
     @frame = view.getUint32(offset, true); offset += size_Uint32
     @weight = view.getFloat32(offset, true); offset += size_Float32

@@ -98,6 +98,7 @@
         uvs[2 * i + 1] = vertex.v;
         edge[i] = 1 - vertex.edge_flag;
       }
+      model.positions = positions;
       this.vbuffers = (function() {
         var _i, _len, _ref, _results;
         _ref = [
@@ -190,17 +191,53 @@
       this.registerKeyListener();
       this.registerMouseListener();
       if (this.drawSelfShadow) this.shadowMap = new MMDGL.ShadowMap(this);
+      this.motionManager = new MMDGL.MotionManager;
       t0 = Date.now();
       step = function() {
         var t1;
+        _this.move();
         _this.computeMatrices();
         _this.render();
         t1 = Date.now();
-        setTimeout(step, Math.max(0, _this.fps - (t1 - t0)));
+        setTimeout(step, Math.max(0, 1000 / _this.fps * 2 - (t1 - t0)));
         return t0 = t1;
       };
-      console.log(this);
       step();
+    };
+
+    MMDGL.prototype.move = function() {
+      var b, base, bones, i, model, morph, morphs, name, vert, weight, _i, _j, _len, _len2, _ref, _ref2, _ref3;
+      if (!this.playing) return;
+      this.frame++;
+      model = this.model;
+      base = model.morphsDict['base'];
+      _ref = this.motionManager.getFrame(this.frame), morphs = _ref.morphs, bones = _ref.bones;
+      for (name in morphs) {
+        weight = morphs[name];
+        morph = model.morphsDict[name];
+        if (!morph) continue;
+        _ref2 = morph.vert_data;
+        for (_i = 0, _len = _ref2.length; _i < _len; _i++) {
+          vert = _ref2[_i];
+          b = base.vert_data[vert.index];
+          i = b.index;
+          model.positions[3 * i] += vert.x * weight;
+          model.positions[3 * i + 1] += vert.y * weight;
+          model.positions[3 * i + 2] += vert.z * weight;
+        }
+      }
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.vbuffers[0].buffer);
+      this.gl.bufferData(this.gl.ARRAY_BUFFER, model.positions, this.gl.STATIC_DRAW);
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
+      _ref3 = base.vert_data;
+      for (_j = 0, _len2 = _ref3.length; _j < _len2; _j++) {
+        b = _ref3[_j];
+        i = b.index;
+        model.positions[3 * i] = b.x;
+        model.positions[3 * i + 1] = b.y;
+        model.positions[3 * i + 2] = b.z;
+      }
+      if (this.frame > this.motionManager.lastFrame) this.pause();
     };
 
     MMDGL.prototype.computeMatrices = function() {
@@ -220,8 +257,8 @@
     };
 
     MMDGL.prototype.render = function() {
-      var material, offset, vb, _i, _j, _len, _len2, _ref, _ref2;
-      if (!this.redraw) return;
+      var i, material, offset, vb, _i, _len, _len2, _ref, _ref2;
+      if (!this.redraw && !this.playing) return;
       this.redraw = false;
       this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
       this.gl.viewport(0, 0, this.width, this.height);
@@ -237,8 +274,8 @@
       this.setUniforms();
       offset = 0;
       _ref2 = this.model.materials;
-      for (_j = 0, _len2 = _ref2.length; _j < _len2; _j++) {
-        material = _ref2[_j];
+      for (i = 0, _len2 = _ref2.length; i < _len2; i++) {
+        material = _ref2[i];
         this.renderMaterial(material, offset);
         this.renderEdge(material, offset);
         offset += material.face_vert_count * 2;
@@ -467,11 +504,33 @@
       this.edgeColor = [0, 0, 0];
       this.lightDirection = [0.5, 1.0, 0.5];
       this.lightDistance = 8875;
-      this.lightColor = [154 / 255, 154 / 255, 154 / 255];
+      this.lightColor = [0.6, 0.6, 0.6];
       this.drawSelfShadow = true;
       this.drawAxes = true;
       this.drawCenterPoint = true;
       this.fps = 30;
+      this.playing = false;
+      this.frame = -1;
+    };
+
+    MMDGL.prototype.addMotion = function(motion) {
+      this.motionManager.addMotion(motion);
+    };
+
+    MMDGL.prototype.play = function() {
+      this.playing = true;
+    };
+
+    MMDGL.prototype.pause = function() {
+      this.playing = false;
+    };
+
+    MMDGL.prototype.rewind = function() {
+      this.setFrameNumber(-1);
+    };
+
+    MMDGL.prototype.setFrameNumber = function(num) {
+      this.frame = num;
     };
 
     return MMDGL;
