@@ -157,6 +157,10 @@ previousRegisteredFrame = (frames, frame) ->
       break if delta == 1 and frames[idx] <= frame
   return idx
 
+interpolateLinear = (x1, x2, y1, y2, x) ->
+  # when using this function, make sure x1 < x2
+  return (y2 * (x - x1) + y1 * (x2 - x)) / (x2 - x1)
+
 interpolateBezier = (x1, x2, y1, y2, x) ->
   ###
     interpolate using Bezier curve (http://musashi.or.tv/fontguide_doc3.htm)
@@ -171,22 +175,21 @@ interpolateBezier = (x1, x2, y1, y2, x) ->
     i.e. find t such that f(t) = 3 s^2 t x_1 + 3 s t^2 x_2 + t^3 - x = 0
     One thing to note here is that f(t) is monotonically increasing in the range [0,1]
     Therefore, when I calculate f(t) for the t I guessed,
-    if f(t) < 0 then increase t slightly, and if f(t) > 0 then decrease t slightly.
-    The level of precision I need is about 1/2^16, so I repeat 15 times
     Finally find y for the t.
   ###
-  t = s = 0.5
-  for i in [0...15]
-    ft = (3 * s * s * t * x1) + (3 * s * t * t * x2) + (t * t * t) - x
-    break if ft == 0
-    if ft > 0
-      t -= 1 / (4 << i)
-    else # ft < 0
-      t += 1 / (4 << i)
-    s = 1 - t
-  return (3 * s * s * t * y1) + (3 * s * t * t * y2) + (t * t * t)
+  #Adopted from MMDAgent
+  t = x
+  while true
+    v = ipfunc(t, x1, x2) - x
+    break if Math.abs(v) < 0.0001
+    tt = ipfuncd(t, x1, x2)
+    break if tt == 0
+    t -= v / tt
+  return ipfunc(t, y1, y2)
 
-interpolateLinear = (x1, x2, y1, y2, x) ->
-  # when using this function, make sure x1 < x2
-  return (y2 * (x - x1) + y1 * (x2 - x)) / (x2 - x1)
+ipfunc = (t, p1, p2) ->
+  ((1 + 3 * p1 - 3 * p2) * t * t * t + (3 * p2 - 6 * p1) * t * t + 3 * p1 * t)
+
+ipfuncd = (t, p1, p2) ->
+  ((3 + 9 * p1 - 9 * p2) * t * t + (6 * p2 - 12 * p1) * t + 3 * p1)
 
