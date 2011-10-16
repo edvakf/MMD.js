@@ -449,6 +449,7 @@ class this.MMDGL
       return if @playing
       delta = e.detail || e.wheelDelta / (-40) # positive: wheel down
       @distance += delta * @distance / @DIST
+      @redraw = true
       e.preventDefault()
     , false)
     return

@@ -500,6 +500,7 @@
         if (_this.playing) return;
         delta = e.detail || e.wheelDelta / (-40);
         _this.distance += delta * _this.distance / _this.DIST;
+        _this.redraw = true;
         return e.preventDefault();
       }, false);
     };
