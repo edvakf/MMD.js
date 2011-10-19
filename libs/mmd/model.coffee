@@ -28,7 +28,7 @@ class this.Model # export to top level
     @english_bone_names = null
     @english_morph_names = null
     @english_bone_group_names = null
-    @additional_toon_file_names = null
+    @toon_file_names = null
     @rigid_bodies = null
     @joints = null
 

@@ -113,9 +113,17 @@ class this.MMDGL
 
     for material in model.materials
       material.textures = {} if not material.textures
+
       toonIndex = material.toon_index
       fileName = 'toon' + ('0' + (toonIndex + 1)).slice(-2) + '.bmp'
-      material.textures.toon = @textureManager.get('toon', 'data/' + fileName)
+      if toonIndex == -1 or # -1 is special (no shadow)
+        !model.toon_file_names or # no toon_file_names section in PMD
+        fileName == model.toon_file_names[toonIndex] # toonXX.bmp is in 'data' directory
+          fileName = 'data/' + fileName
+      else # otherwise the toon texture is in the model's directory
+        fileName = model.directory + '/' + model.toon_file_names[toonIndex]
+      material.textures.toon = @textureManager.get('toon', fileName)
+
       if material.texture_file_name
         for fileName in material.texture_file_name.split('*')
           switch fileName.slice(-4)

@@ -33,7 +33,7 @@
       this.english_bone_names = null;
       this.english_morph_names = null;
       this.english_bone_group_names = null;
-      this.additional_toon_file_names = null;
+      this.toon_file_names = null;
       this.rigid_bodies = null;
       this.joints = null;
     }

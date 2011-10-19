@@ -160,7 +160,12 @@
         if (!material.textures) material.textures = {};
         toonIndex = material.toon_index;
         fileName = 'toon' + ('0' + (toonIndex + 1)).slice(-2) + '.bmp';
-        material.textures.toon = this.textureManager.get('toon', 'data/' + fileName);
+        if (toonIndex === -1 || !model.toon_file_names || fileName === model.toon_file_names[toonIndex]) {
+          fileName = 'data/' + fileName;
+        } else {
+          fileName = model.directory + '/' + model.toon_file_names[toonIndex];
+        }
+        material.textures.toon = this.textureManager.get('toon', fileName);
         if (material.texture_file_name) {
           _ref2 = material.texture_file_name.split('*');
           for (_j = 0, _len2 = _ref2.length; _j < _len2; _j++) {
