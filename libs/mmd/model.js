@@ -71,10 +71,12 @@
       offset = this.getBoneTable(buffer, view, offset);
       if (offset >= length) return;
       offset = this.getEnglishFlag(buffer, view, offset);
-      offset = this.getEnglishName(buffer, view, offset);
-      offset = this.getEnglishBoneNames(buffer, view, offset);
-      offset = this.getEnglishMorphNames(buffer, view, offset);
-      offset = this.getEnglishBoneGroupNames(buffer, view, offset);
+      if (this.english_flag) {
+        offset = this.getEnglishName(buffer, view, offset);
+        offset = this.getEnglishBoneNames(buffer, view, offset);
+        offset = this.getEnglishMorphNames(buffer, view, offset);
+        offset = this.getEnglishBoneGroupNames(buffer, view, offset);
+      }
       if (offset >= length) return;
       offset = this.getToonFileNames(buffer, view, offset);
       if (offset >= length) return;
