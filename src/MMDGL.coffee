@@ -244,12 +244,19 @@ class this.MMDGL
 
     @setUniforms()
 
+    @gl.enable(@gl.CULL_FACE)
+    @gl.enable(@gl.BLEND)
+    @gl.blendFuncSeparate(@gl.SRC_ALPHA, @gl.ONE_MINUS_SRC_ALPHA, @gl.SRC_ALPHA, @gl.DST_ALPHA)
+
     offset = 0
     for material,i in @model.materials
       @renderMaterial(material, offset)
       @renderEdge(material, offset)
       # offset is in bytes (size of unsigned short = 2)
       offset += material.face_vert_count * 2
+
+    @gl.disable(@gl.CULL_FACE)
+    @gl.disable(@gl.BLEND)
 
     @renderAxes()
 
@@ -315,16 +322,15 @@ class this.MMDGL
     else
       @gl.uniform1i(@program.uUseSphereMap, false)
 
+    @gl.cullFace(@gl.BACK)
     @gl.drawElements(@gl.TRIANGLES, material.face_vert_count, @gl.UNSIGNED_SHORT, offset)
     return
 
   renderEdge: (material, offset) ->
     if @drawEdge and material.edge_flag
       @gl.uniform1i(@program.uEdge, true)
-      @gl.enable(@gl.CULL_FACE)
       @gl.cullFace(@gl.FRONT)
       @gl.drawElements(@gl.TRIANGLES, material.face_vert_count, @gl.UNSIGNED_SHORT, offset)
-      @gl.disable(@gl.CULL_FACE)
     return
 
   renderAxes: ->

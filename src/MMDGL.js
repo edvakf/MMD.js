@@ -284,6 +284,9 @@
       this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, this.ibuffer);
       this.setSelfShadowTexture();
       this.setUniforms();
+      this.gl.enable(this.gl.CULL_FACE);
+      this.gl.enable(this.gl.BLEND);
+      this.gl.blendFuncSeparate(this.gl.SRC_ALPHA, this.gl.ONE_MINUS_SRC_ALPHA, this.gl.SRC_ALPHA, this.gl.DST_ALPHA);
       offset = 0;
       _ref2 = this.model.materials;
       for (i = 0, _len2 = _ref2.length; i < _len2; i++) {
@@ -292,6 +295,8 @@
         this.renderEdge(material, offset);
         offset += material.face_vert_count * 2;
       }
+      this.gl.disable(this.gl.CULL_FACE);
+      this.gl.disable(this.gl.BLEND);
       this.renderAxes();
       this.gl.flush();
     };
@@ -349,16 +354,15 @@
       } else {
         this.gl.uniform1i(this.program.uUseSphereMap, false);
       }
+      this.gl.cullFace(this.gl.BACK);
       this.gl.drawElements(this.gl.TRIANGLES, material.face_vert_count, this.gl.UNSIGNED_SHORT, offset);
     };
 
     MMDGL.prototype.renderEdge = function(material, offset) {
       if (this.drawEdge && material.edge_flag) {
         this.gl.uniform1i(this.program.uEdge, true);
-        this.gl.enable(this.gl.CULL_FACE);
         this.gl.cullFace(this.gl.FRONT);
         this.gl.drawElements(this.gl.TRIANGLES, material.face_vert_count, this.gl.UNSIGNED_SHORT, offset);
-        this.gl.disable(this.gl.CULL_FACE);
       }
     };
 

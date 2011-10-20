@@ -79,9 +79,9 @@ MMDGL.FragmentShaderSource = '''
     vec3 cameraDirection = normalize(-vPosition); // camera located at origin in view space
 
     vec3 color;
+    float alpha = uAlpha;
 
-    //if (uEdge) {
-    if (uEdge || !gl_FrontFacing) {
+    if (uEdge) {
 
       color = uEdgeColor;
 
@@ -89,7 +89,9 @@ MMDGL.FragmentShaderSource = '''
 
       color = vec3(1.0, 1.0, 1.0);
       if (uUseTexture) {
-        color *= texture2D(uTexture, vTextureCoord).rgb;
+        vec4 texColor = texture2D(uTexture, vTextureCoord);
+        color *= texColor.rgb;
+        alpha *= texColor.a;
       }
       if (uUseSphereMap) {
         vec2 sphereCoord = 0.5 * (1.0 + vec2(1.0, -1.0) * norm.xy);
@@ -123,7 +125,7 @@ MMDGL.FragmentShaderSource = '''
       color *= texture2D(uToon, toonCoord).rgb;
 
     }
-    gl_FragColor = vec4(color, uAlpha);
+    gl_FragColor = vec4(color, alpha);
 
   }
 
