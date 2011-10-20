@@ -390,7 +390,7 @@ class this.MMDGL
           @distance = @DIST
         when 1037 # shift + left
           vec3.multiplyMat4(@center, @mvMatrix)
-          @center[0] += @distance / @DIST
+          @center[0] -= @distance / @DIST
           vec3.multiplyMat4(@center, mat4.createInverse(@mvMatrix))
         when 1039 # shift + right
           vec3.multiplyMat4(@center, @mvMatrix)
@@ -402,7 +402,7 @@ class this.MMDGL
           vec3.multiplyMat4(@center, mat4.createInverse(@mvMatrix))
         when 1040 # shift + down
           vec3.multiplyMat4(@center, @mvMatrix)
-          @center[1] += @distance / @DIST
+          @center[1] -= @distance / @DIST
           vec3.multiplyMat4(@center, mat4.createInverse(@mvMatrix))
         else return
 

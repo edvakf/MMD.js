@@ -428,7 +428,7 @@
             break;
           case 1037:
             vec3.multiplyMat4(_this.center, _this.mvMatrix);
-            _this.center[0] += _this.distance / _this.DIST;
+            _this.center[0] -= _this.distance / _this.DIST;
             vec3.multiplyMat4(_this.center, mat4.createInverse(_this.mvMatrix));
             break;
           case 1039:
@@ -443,7 +443,7 @@
             break;
           case 1040:
             vec3.multiplyMat4(_this.center, _this.mvMatrix);
-            _this.center[1] += _this.distance / _this.DIST;
+            _this.center[1] -= _this.distance / _this.DIST;
             vec3.multiplyMat4(_this.center, mat4.createInverse(_this.mvMatrix));
             break;
           default:
