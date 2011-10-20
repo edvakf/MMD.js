@@ -216,13 +216,17 @@
       this.frame++;
       model = this.model;
       _ref = this.motionManager.getFrame(this.frame), bones = _ref.bones, morphs = _ref.morphs, camera = _ref.camera, light = _ref.light;
-      this.distance = camera.distance;
-      this.rotx = camera.rotation[0];
-      this.roty = camera.rotation[1];
-      this.center = vec3.create(camera.location);
-      this.fovy = camera.view_angle;
-      this.lightDirection = light.location;
-      this.lightColor = light.color;
+      if (camera) {
+        this.distance = camera.distance;
+        this.rotx = camera.rotation[0];
+        this.roty = camera.rotation[1];
+        this.center = vec3.create(camera.location);
+        this.fovy = camera.view_angle;
+      }
+      if (light) {
+        this.lightDirection = light.location;
+        this.lightColor = light.color;
+      }
       base = model.morphsDict['base'];
       for (name in morphs) {
         weight = morphs[name];

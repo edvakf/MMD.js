@@ -74,6 +74,7 @@ class MMDGL.MotionManager
     return morphs
 
   getCameraFrame: (frame) ->
+    return null if not @camera
     timeline = @camera
     frames = @cameraFrames
     lastFrame = frames[frames.length - 1]
@@ -113,6 +114,7 @@ class MMDGL.MotionManager
     return camera
 
   getLightFrame: (frame) ->
+    return null if not @light
     timeline = @light
     frames = @lightFrames
     lastFrame = frames[frames.length - 1]

@@ -168,14 +168,16 @@ class this.MMDGL
 
     {bones, morphs, camera, light} = @motionManager.getFrame(@frame)
 
-    @distance = camera.distance
-    @rotx = camera.rotation[0]
-    @roty = camera.rotation[1]
-    @center = vec3.create(camera.location)
-    @fovy = camera.view_angle
+    if camera
+      @distance = camera.distance
+      @rotx = camera.rotation[0]
+      @roty = camera.rotation[1]
+      @center = vec3.create(camera.location)
+      @fovy = camera.view_angle
 
-    @lightDirection = light.location
-    @lightColor = light.color
+    if light
+      @lightDirection = light.location
+      @lightColor = light.color
 
     base = model.morphsDict['base']
     for name of morphs

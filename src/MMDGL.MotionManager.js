@@ -101,6 +101,7 @@
 
     MotionManager.prototype.getCameraFrame = function(frame) {
       var cache, camera, frames, idx, interpolated_x, lastFrame, n, next, p, prev, timeline;
+      if (!this.camera) return null;
       timeline = this.camera;
       frames = this.cameraFrames;
       lastFrame = frames[frames.length - 1];
@@ -134,6 +135,7 @@
 
     MotionManager.prototype.getLightFrame = function(frame) {
       var frames, idx, lastFrame, light, n, p, timeline;
+      if (!this.light) return null;
       timeline = this.light;
       frames = this.lightFrames;
       lastFrame = frames[frames.length - 1];
