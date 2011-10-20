@@ -204,7 +204,7 @@
     t = x;
     while (true) {
       v = ipfunc(t, x1, x2) - x;
-      if (Math.abs(v) < 0.0001) break;
+      if (v * v < 0.0000001) break;
       tt = ipfuncd(t, x1, x2);
       if (tt === 0) break;
       t -= v / tt;

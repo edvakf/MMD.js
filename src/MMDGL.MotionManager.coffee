@@ -183,7 +183,7 @@ interpolateBezier = (x1, x2, y1, y2, x) ->
   t = x
   while true
     v = ipfunc(t, x1, x2) - x
-    break if Math.abs(v) < 0.0001
+    break if v * v < 0.0000001 # Math.abs(v) < 0.0001
     tt = ipfuncd(t, x1, x2)
     break if tt == 0
     t -= v / tt
