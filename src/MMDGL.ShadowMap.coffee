@@ -69,7 +69,10 @@ class MMDGL.ShadowMap
     gl.uniformMatrix4fv(program.uMVMatrix, false, @mvMatrix)
     gl.uniformMatrix4fv(program.uPMatrix, false, @pMatrix)
 
+    gl.enable(gl.CULL_FACE)
+    gl.cullFace(gl.BACK)
     gl.drawElements(gl.TRIANGLES, @mmd.model.triangles.length, gl.UNSIGNED_SHORT, 0)
+    gl.disable(gl.CULL_FACE)
 
     gl.uniform1i(program.uGenerateShadowMap, false)
 

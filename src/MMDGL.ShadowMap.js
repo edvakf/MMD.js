@@ -63,7 +63,10 @@
       gl.uniform1i(program.uGenerateShadowMap, true);
       gl.uniformMatrix4fv(program.uMVMatrix, false, this.mvMatrix);
       gl.uniformMatrix4fv(program.uPMatrix, false, this.pMatrix);
+      gl.enable(gl.CULL_FACE);
+      gl.cullFace(gl.BACK);
       gl.drawElements(gl.TRIANGLES, this.mmd.model.triangles.length, gl.UNSIGNED_SHORT, 0);
+      gl.disable(gl.CULL_FACE);
       gl.uniform1i(program.uGenerateShadowMap, false);
       gl.bindTexture(gl.TEXTURE_2D, this.texture);
       gl.generateMipmap(gl.TEXTURE_2D);
