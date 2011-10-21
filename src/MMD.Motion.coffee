@@ -7,7 +7,7 @@ size_Float32 = Float32Array.BYTES_PER_ELEMENT
 
 slice = Array.prototype.slice
 
-class this.Motion # export to top level
+class this.MMD.Motion # export to top level
   constructor: (path) ->
     @path = path
 

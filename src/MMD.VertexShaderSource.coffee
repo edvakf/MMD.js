@@ -1,4 +1,4 @@
-MMDGL.VertexShaderSource = '''
+MMD.VertexShaderSource = '''
 
   uniform mat4 uMVMatrix; // model-view matrix (model -> view space)
   uniform mat4 uPMatrix; // projection matrix (view -> projection space)

@@ -1,4 +1,4 @@
-class MMDGL.TextureManager
+class MMD.TextureManager
   constructor: (mmd) ->
     @mmd = mmd
     @store = {}

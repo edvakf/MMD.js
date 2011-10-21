@@ -1,4 +1,4 @@
-MMDGL.FragmentShaderSource = '''
+MMD.FragmentShaderSource = '''
 
   #ifdef GL_ES
   precision highp float;

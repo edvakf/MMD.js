@@ -1,9 +1,9 @@
 (function() {
   var __hasProp = Object.prototype.hasOwnProperty, __indexOf = Array.prototype.indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (__hasProp.call(this, i) && this[i] === item) return i; } return -1; };
 
-  this.MMDGL = (function() {
+  this.MMD = (function() {
 
-    function MMDGL(canvas, width, height) {
+    function MMD(canvas, width, height) {
       this.width = width;
       this.height = height;
       this.gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
@@ -13,17 +13,17 @@
       }
     }
 
-    MMDGL.prototype.initShaders = function() {
+    MMD.prototype.initShaders = function() {
       var attributes, fshader, line, name, src, type, uniforms, vshader, _i, _j, _k, _l, _len, _len2, _len3, _len4, _ref, _ref2, _ref3;
       vshader = this.gl.createShader(this.gl.VERTEX_SHADER);
-      this.gl.shaderSource(vshader, MMDGL.VertexShaderSource);
+      this.gl.shaderSource(vshader, MMD.VertexShaderSource);
       this.gl.compileShader(vshader);
       if (!this.gl.getShaderParameter(vshader, this.gl.COMPILE_STATUS)) {
         alert('Vertex shader compilation error');
         throw this.gl.getShaderInfoLog(vshader);
       }
       fshader = this.gl.createShader(this.gl.FRAGMENT_SHADER);
-      this.gl.shaderSource(fshader, MMDGL.FragmentShaderSource);
+      this.gl.shaderSource(fshader, MMD.FragmentShaderSource);
       this.gl.compileShader(fshader);
       if (!this.gl.getShaderParameter(fshader, this.gl.COMPILE_STATUS)) {
         alert('Fragment shader compilation error');
@@ -40,7 +40,7 @@
       this.gl.useProgram(this.program);
       attributes = [];
       uniforms = [];
-      _ref = [MMDGL.VertexShaderSource, MMDGL.FragmentShaderSource];
+      _ref = [MMD.VertexShaderSource, MMD.FragmentShaderSource];
       for (_i = 0, _len = _ref.length; _i < _len; _i++) {
         src = _ref[_i];
         _ref2 = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '').split(';');
@@ -68,17 +68,17 @@
       }
     };
 
-    MMDGL.prototype.addModel = function(model) {
+    MMD.prototype.addModel = function(model) {
       this.model = model;
     };
 
-    MMDGL.prototype.initBuffers = function() {
+    MMD.prototype.initBuffers = function() {
       this.initVertices();
       this.initIndices();
       this.initTextures();
     };
 
-    MMDGL.prototype.initVertices = function() {
+    MMD.prototype.initVertices = function() {
       var buffer, data, edge, i, length, model, normals, positions, uvs, vertex;
       model = this.model;
       length = model.vertices.length;
@@ -137,7 +137,7 @@
       this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
     };
 
-    MMDGL.prototype.initIndices = function() {
+    MMD.prototype.initIndices = function() {
       var indices;
       indices = this.model.triangles;
       this.ibuffer = this.gl.createBuffer();
@@ -146,11 +146,11 @@
       this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, null);
     };
 
-    MMDGL.prototype.initTextures = function() {
+    MMD.prototype.initTextures = function() {
       var fileName, material, model, toonIndex, type, _i, _j, _len, _len2, _ref, _ref2;
       var _this = this;
       model = this.model;
-      this.textureManager = new MMDGL.TextureManager(this);
+      this.textureManager = new MMD.TextureManager(this);
       this.textureManager.onload = function() {
         return _this.redraw = true;
       };
@@ -186,7 +186,7 @@
       }
     };
 
-    MMDGL.prototype.start = function() {
+    MMD.prototype.start = function() {
       var step, t0;
       var _this = this;
       this.gl.clearColor(1, 1, 1, 1);
@@ -195,8 +195,8 @@
       this.redraw = true;
       this.registerKeyListener();
       this.registerMouseListener();
-      if (this.drawSelfShadow) this.shadowMap = new MMDGL.ShadowMap(this);
-      this.motionManager = new MMDGL.MotionManager;
+      if (this.drawSelfShadow) this.shadowMap = new MMD.ShadowMap(this);
+      this.motionManager = new MMD.MotionManager;
       t0 = Date.now();
       step = function() {
         var t1;
@@ -210,7 +210,7 @@
       step();
     };
 
-    MMDGL.prototype.move = function() {
+    MMD.prototype.move = function() {
       var b, base, bones, camera, i, light, model, morph, morphs, name, vert, weight, _i, _j, _len, _len2, _ref, _ref2, _ref3;
       if (!this.playing) return;
       this.frame++;
@@ -256,7 +256,7 @@
       if (this.frame > this.motionManager.lastFrame) this.pause();
     };
 
-    MMDGL.prototype.computeMatrices = function() {
+    MMD.prototype.computeMatrices = function() {
       var up;
       this.modelMatrix = mat4.createIdentity();
       this.cameraPosition = vec3.create([0, 0, this.distance]);
@@ -272,7 +272,7 @@
       this.nMatrix = mat4.inverseTranspose(this.mvMatrix, mat4.create());
     };
 
-    MMDGL.prototype.render = function() {
+    MMD.prototype.render = function() {
       var i, material, offset, vb, _i, _len, _len2, _ref, _ref2;
       if (!this.redraw && !this.playing) return;
       this.redraw = false;
@@ -305,7 +305,7 @@
       this.gl.flush();
     };
 
-    MMDGL.prototype.setSelfShadowTexture = function() {
+    MMD.prototype.setSelfShadowTexture = function() {
       if (this.drawSelfShadow) {
         this.shadowMap.generate();
         this.gl.activeTexture(this.gl.TEXTURE3);
@@ -318,7 +318,7 @@
       }
     };
 
-    MMDGL.prototype.setUniforms = function() {
+    MMD.prototype.setUniforms = function() {
       var lightDirection;
       this.gl.uniform1f(this.program.uEdgeThickness, this.edgeThickness);
       this.gl.uniform3fv(this.program.uEdgeColor, this.edgeColor);
@@ -331,7 +331,7 @@
       this.gl.uniform3fv(this.program.uLightColor, this.lightColor);
     };
 
-    MMDGL.prototype.renderMaterial = function(material, offset) {
+    MMD.prototype.renderMaterial = function(material, offset) {
       var textures;
       this.gl.uniform3fv(this.program.uAmbientColor, material.ambient);
       this.gl.uniform3fv(this.program.uSpecularColor, material.specular);
@@ -362,7 +362,7 @@
       this.gl.drawElements(this.gl.TRIANGLES, material.face_vert_count, this.gl.UNSIGNED_SHORT, offset);
     };
 
-    MMDGL.prototype.renderEdge = function(material, offset) {
+    MMD.prototype.renderEdge = function(material, offset) {
       if (this.drawEdge && material.edge_flag) {
         this.gl.uniform1i(this.program.uEdge, true);
         this.gl.cullFace(this.gl.FRONT);
@@ -370,7 +370,7 @@
       }
     };
 
-    MMDGL.prototype.renderAxes = function() {
+    MMD.prototype.renderAxes = function() {
       var axis, axisBuffer, color, i;
       axisBuffer = this.gl.createBuffer();
       this.gl.bindBuffer(this.gl.ARRAY_BUFFER, axisBuffer);
@@ -406,7 +406,7 @@
       }
     };
 
-    MMDGL.prototype.registerKeyListener = function() {
+    MMD.prototype.registerKeyListener = function() {
       var _this = this;
       document.addEventListener('keydown', function(e) {
         if (_this.playing) return;
@@ -462,7 +462,7 @@
       }, false);
     };
 
-    MMDGL.prototype.registerMouseListener = function() {
+    MMD.prototype.registerMouseListener = function() {
       var onwheel;
       var _this = this;
       document.addEventListener('mousedown', function(e) {
@@ -524,7 +524,7 @@
       }
     };
 
-    MMDGL.prototype.initParameters = function() {
+    MMD.prototype.initParameters = function() {
       this.rotx = this.roty = 0;
       this.distance = this.DIST = 35;
       this.center = [0, 10, 0];
@@ -543,27 +543,27 @@
       this.frame = -1;
     };
 
-    MMDGL.prototype.addMotion = function(motion) {
+    MMD.prototype.addMotion = function(motion) {
       this.motionManager.addMotion(motion);
     };
 
-    MMDGL.prototype.play = function() {
+    MMD.prototype.play = function() {
       this.playing = true;
     };
 
-    MMDGL.prototype.pause = function() {
+    MMD.prototype.pause = function() {
       this.playing = false;
     };
 
-    MMDGL.prototype.rewind = function() {
+    MMD.prototype.rewind = function() {
       this.setFrameNumber(-1);
     };
 
-    MMDGL.prototype.setFrameNumber = function(num) {
+    MMD.prototype.setFrameNumber = function(num) {
       this.frame = num;
     };
 
-    return MMDGL;
+    return MMD;
 
   })();
 

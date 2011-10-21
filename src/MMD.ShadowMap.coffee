@@ -1,4 +1,4 @@
-class MMDGL.ShadowMap
+class MMD.ShadowMap
   constructor: (mmd) ->
     @mmd = mmd
     @framebuffer = @texture = null

@@ -1,4 +1,4 @@
-class this.MMDGL
+class this.MMD
   constructor: (canvas, @width, @height) ->
     @gl = canvas.getContext('webgl') or canvas.getContext('experimental-webgl')
     if not @gl
@@ -7,14 +7,14 @@ class this.MMDGL
 
   initShaders: ->
     vshader = @gl.createShader(@gl.VERTEX_SHADER)
-    @gl.shaderSource(vshader, MMDGL.VertexShaderSource)
+    @gl.shaderSource(vshader, MMD.VertexShaderSource)
     @gl.compileShader(vshader)
     if not @gl.getShaderParameter(vshader, @gl.COMPILE_STATUS)
       alert('Vertex shader compilation error')
       throw @gl.getShaderInfoLog(vshader)
 
     fshader = @gl.createShader(@gl.FRAGMENT_SHADER)
-    @gl.shaderSource(fshader, MMDGL.FragmentShaderSource)
+    @gl.shaderSource(fshader, MMD.FragmentShaderSource)
     @gl.compileShader(fshader)
     if not @gl.getShaderParameter(fshader, @gl.COMPILE_STATUS)
       alert('Fragment shader compilation error')
@@ -33,7 +33,7 @@ class this.MMDGL
 
     attributes = []
     uniforms = []
-    for src in [MMDGL.VertexShaderSource, MMDGL.FragmentShaderSource]
+    for src in [MMD.VertexShaderSource, MMD.FragmentShaderSource]
       for line in src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '').split(';')
         type = line.match(/^\s*(uniform|attribute)\s+/)?[1]
         continue if not type
@@ -108,7 +108,7 @@ class this.MMDGL
   initTextures: ->
     model = @model
 
-    @textureManager = new MMDGL.TextureManager(this)
+    @textureManager = new MMD.TextureManager(this)
     @textureManager.onload = => @redraw = true
 
     for material in model.materials
@@ -143,8 +143,8 @@ class this.MMDGL
     @registerKeyListener()
     @registerMouseListener()
 
-    @shadowMap = new MMDGL.ShadowMap(this) if @drawSelfShadow
-    @motionManager = new MMDGL.MotionManager
+    @shadowMap = new MMD.ShadowMap(this) if @drawSelfShadow
+    @motionManager = new MMD.MotionManager
 
     t0 = Date.now()
     step = =>

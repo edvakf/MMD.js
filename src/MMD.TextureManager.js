@@ -1,7 +1,7 @@
 (function() {
   var checkSize, loadImage;
 
-  MMDGL.TextureManager = (function() {
+  MMD.TextureManager = (function() {
 
     function TextureManager(mmd) {
       this.mmd = mmd;

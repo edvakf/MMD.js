@@ -1,7 +1,7 @@
 (function() {
   var interpolateBezier, interpolateLinear, ipfunc, ipfuncd, previousRegisteredFrame;
 
-  MMDGL.MotionManager = (function() {
+  MMD.MotionManager = (function() {
 
     function MotionManager() {
       this.bones = {};

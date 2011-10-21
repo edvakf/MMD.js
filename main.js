@@ -7,22 +7,22 @@ window.onload = function() {
 
   document.body.appendChild(canvas);
 
-  var mmd = new MMDGL(canvas, canvas.width, canvas.height);
+  var mmd = new MMD(canvas, canvas.width, canvas.height);
   mmd.initShaders();
   mmd.initParameters();
 
-  var miku = new Model('model', 'Miku_Hatsune.pmd');
+  var miku = new MMD.Model('model', 'Miku_Hatsune.pmd');
   //var miku = new Model('Lat', 'Normal.pmd');
   miku.load(function() {
     mmd.addModel(miku);
     mmd.initBuffers();
     mmd.start();
 
-    var smile = new Motion('motion/smile.vmd');
+    var smile = new MMD.Motion('motion/smile.vmd');
     smile.load(function() {
       mmd.addMotion(smile);
 
-      var camera = new Motion('motion/zoom_in.vmd');
+      var camera = new MMD.Motion('motion/zoom_in.vmd');
       camera.load(function() {
         mmd.addMotion(camera);
         mmd.play();

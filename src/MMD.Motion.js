@@ -9,7 +9,7 @@
 
   slice = Array.prototype.slice;
 
-  this.Motion = (function() {
+  this.MMD.Motion = (function() {
 
     function Motion(path) {
       this.path = path;

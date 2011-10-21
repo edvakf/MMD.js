@@ -1,4 +1,4 @@
-class MMDGL.MotionManager
+class MMD.MotionManager
   constructor: ->
     @bones = {}
     @morphs = {}

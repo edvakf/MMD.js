@@ -9,7 +9,7 @@ size_Float32 = Float32Array.BYTES_PER_ELEMENT
 
 slice = Array.prototype.slice
 
-class this.Model # export to top level
+class this.MMD.Model # export to top level
   constructor: (directory, filename) ->
     @directory = directory
     @filename = filename

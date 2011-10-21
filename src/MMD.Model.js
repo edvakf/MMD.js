@@ -13,7 +13,7 @@
 
   slice = Array.prototype.slice;
 
-  this.Model = (function() {
+  this.MMD.Model = (function() {
 
     function Model(directory, filename) {
       this.directory = directory;

@@ -1,6 +1,6 @@
 (function() {
 
-  MMDGL.ShadowMap = (function() {
+  MMD.ShadowMap = (function() {
 
     function ShadowMap(mmd) {
       this.mmd = mmd;
