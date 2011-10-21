@@ -461,13 +461,18 @@ class this.MMDGL
     , false)
 
     #wheel
-    document.addEventListener('mousewheel', (e) =>
+    onwheel = (e) =>
       return if @playing
       delta = e.detail || e.wheelDelta / (-40) # positive: wheel down
       @distance += delta * @distance / @DIST
       @redraw = true
       e.preventDefault()
-    , false)
+
+    if 'onmousewheel' of window
+      document.addEventListener('mousewheel', onwheel, false)
+    else
+      document.addEventListener('DOMMouseScroll', onwheel, false)
+
     return
 
   initParameters: ->

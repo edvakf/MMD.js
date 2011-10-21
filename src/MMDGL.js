@@ -463,6 +463,7 @@
     };
 
     MMDGL.prototype.registerMouseListener = function() {
+      var onwheel;
       var _this = this;
       document.addEventListener('mousedown', function(e) {
         var modifier, move, onmousemove, onmouseup, ox, oy;
@@ -508,14 +509,19 @@
         document.addEventListener('mouseup', onmouseup, false);
         return document.addEventListener('mousemove', onmousemove, false);
       }, false);
-      document.addEventListener('mousewheel', function(e) {
+      onwheel = function(e) {
         var delta;
         if (_this.playing) return;
         delta = e.detail || e.wheelDelta / (-40);
         _this.distance += delta * _this.distance / _this.DIST;
         _this.redraw = true;
         return e.preventDefault();
-      }, false);
+      };
+      if ('onmousewheel' in window) {
+        document.addEventListener('mousewheel', onwheel, false);
+      } else {
+        document.addEventListener('DOMMouseScroll', onwheel, false);
+      }
     };
 
     MMDGL.prototype.initParameters = function() {
