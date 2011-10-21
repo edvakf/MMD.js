@@ -10,6 +10,8 @@ window.onload = function() {
   var mmd = new MMD(canvas, canvas.width, canvas.height);
   mmd.initShaders();
   mmd.initParameters();
+  mmd.registerKeyListener(document);
+  mmd.registerMouseListener(document);
 
   var miku = new MMD.Model('model', 'Miku_Hatsune.pmd');
   //var miku = new Model('Lat', 'Normal.pmd');

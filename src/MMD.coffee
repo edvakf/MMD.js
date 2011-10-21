@@ -140,8 +140,6 @@ class this.MMD
     @gl.enable(@gl.DEPTH_TEST)
 
     @redraw = true
-    @registerKeyListener()
-    @registerMouseListener()
 
     @shadowMap = new MMD.ShadowMap(this) if @drawSelfShadow
     @motionManager = new MMD.MotionManager
@@ -382,8 +380,8 @@ class this.MMD
 
     return
 
-  registerKeyListener: ->
-    document.addEventListener('keydown', (e) =>
+  registerKeyListener: (element) ->
+    element.addEventListener('keydown', (e) =>
       return if @playing
       switch e.keyCode + e.shiftKey * 1000 + e.ctrlKey * 10000 + e.altKey * 100000
         when 37 then @roty += Math.PI / 12 # left
@@ -419,9 +417,13 @@ class this.MMD
     , false)
     return
 
-  registerMouseListener: ->
-    #drag
-    document.addEventListener('mousedown', (e) =>
+  registerMouseListener: (element) ->
+    @registerDragListener(element)
+    @registerWheelListener(element)
+    return
+
+  registerDragListener: (element) ->
+    element.addEventListener('mousedown', (e) =>
       return if @playing
       return if e.button != 0
       modifier = e.shiftKey * 1000 + e.ctrlKey * 10000 + e.altKey * 100000
@@ -444,8 +446,8 @@ class this.MMD
         return if e.button != 0
         modi = e.shiftKey * 1000 + e.ctrlKey * 10000 + e.altKey * 100000
         move(e.clientX - ox, e.clientY - oy, modi)
-        document.removeEventListener('mouseup', onmouseup, false)
-        document.removeEventListener('mousemove', onmousemove, false)
+        element.removeEventListener('mouseup', onmouseup, false)
+        element.removeEventListener('mousemove', onmousemove, false)
         e.preventDefault()
 
       onmousemove = (e) =>
@@ -456,11 +458,12 @@ class this.MMD
         ox = x; oy = y
         e.preventDefault()
 
-      document.addEventListener('mouseup', onmouseup, false)
-      document.addEventListener('mousemove', onmousemove, false)
+      element.addEventListener('mouseup', onmouseup, false)
+      element.addEventListener('mousemove', onmousemove, false)
     , false)
+    return
 
-    #wheel
+  registerWheelListener: (element) ->
     onwheel = (e) =>
       return if @playing
       delta = e.detail || e.wheelDelta / (-40) # positive: wheel down
@@ -469,9 +472,9 @@ class this.MMD
       e.preventDefault()
 
     if 'onmousewheel' of window
-      document.addEventListener('mousewheel', onwheel, false)
+      element.addEventListener('mousewheel', onwheel, false)
     else
-      document.addEventListener('DOMMouseScroll', onwheel, false)
+      element.addEventListener('DOMMouseScroll', onwheel, false)
 
     return
 

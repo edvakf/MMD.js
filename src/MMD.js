@@ -193,8 +193,6 @@
       this.gl.clearDepth(1);
       this.gl.enable(this.gl.DEPTH_TEST);
       this.redraw = true;
-      this.registerKeyListener();
-      this.registerMouseListener();
       if (this.drawSelfShadow) this.shadowMap = new MMD.ShadowMap(this);
       this.motionManager = new MMD.MotionManager;
       t0 = Date.now();
@@ -406,9 +404,9 @@
       }
     };
 
-    MMD.prototype.registerKeyListener = function() {
+    MMD.prototype.registerKeyListener = function(element) {
       var _this = this;
-      document.addEventListener('keydown', function(e) {
+      element.addEventListener('keydown', function(e) {
         if (_this.playing) return;
         switch (e.keyCode + e.shiftKey * 1000 + e.ctrlKey * 10000 + e.altKey * 100000) {
           case 37:
@@ -462,10 +460,14 @@
       }, false);
     };
 
-    MMD.prototype.registerMouseListener = function() {
-      var onwheel;
+    MMD.prototype.registerMouseListener = function(element) {
+      this.registerDragListener(element);
+      this.registerWheelListener(element);
+    };
+
+    MMD.prototype.registerDragListener = function(element) {
       var _this = this;
-      document.addEventListener('mousedown', function(e) {
+      element.addEventListener('mousedown', function(e) {
         var modifier, move, onmousemove, onmouseup, ox, oy;
         if (_this.playing) return;
         if (e.button !== 0) return;
@@ -491,8 +493,8 @@
           if (e.button !== 0) return;
           modi = e.shiftKey * 1000 + e.ctrlKey * 10000 + e.altKey * 100000;
           move(e.clientX - ox, e.clientY - oy, modi);
-          document.removeEventListener('mouseup', onmouseup, false);
-          document.removeEventListener('mousemove', onmousemove, false);
+          element.removeEventListener('mouseup', onmouseup, false);
+          element.removeEventListener('mousemove', onmousemove, false);
           return e.preventDefault();
         };
         onmousemove = function(e) {
@@ -506,9 +508,14 @@
           oy = y;
           return e.preventDefault();
         };
-        document.addEventListener('mouseup', onmouseup, false);
-        return document.addEventListener('mousemove', onmousemove, false);
+        element.addEventListener('mouseup', onmouseup, false);
+        return element.addEventListener('mousemove', onmousemove, false);
       }, false);
+    };
+
+    MMD.prototype.registerWheelListener = function(element) {
+      var onwheel;
+      var _this = this;
       onwheel = function(e) {
         var delta;
         if (_this.playing) return;
@@ -518,9 +525,9 @@
         return e.preventDefault();
       };
       if ('onmousewheel' in window) {
-        document.addEventListener('mousewheel', onwheel, false);
+        element.addEventListener('mousewheel', onwheel, false);
       } else {
-        document.addEventListener('DOMMouseScroll', onwheel, false);
+        element.addEventListener('DOMMouseScroll', onwheel, false);
       }
     };
 
