@@ -13,22 +13,17 @@ window.onload = function() {
   mmd.registerKeyListener(document);
   mmd.registerMouseListener(document);
 
-  var miku = new MMD.Model('model', 'Miku_Hatsune.pmd');
-  //var miku = new Model('Lat', 'Normal.pmd');
+  //var miku = new MMD.Model('model', 'Miku_Hatsune.pmd');
+  var miku = new MMD.Model('Lat', 'Normal.pmd');
   miku.load(function() {
     mmd.addModel(miku);
     mmd.initBuffers();
     mmd.start();
 
-    var smile = new MMD.Motion('motion/smile.vmd');
-    smile.load(function() {
-      mmd.addMotion(smile);
-
-      var camera = new MMD.Motion('motion/zoom_in.vmd');
-      camera.load(function() {
-        mmd.addMotion(camera);
-        mmd.play();
-      });
+    var eyes = new MMD.Motion('motion/kottiminnna.vmd');
+    eyes.load(function() {
+      mmd.addMotion(eyes);
+      mmd.play()
     });
   });
 };
