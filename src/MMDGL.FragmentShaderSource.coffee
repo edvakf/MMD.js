@@ -104,7 +104,7 @@ MMDGL.FragmentShaderSource = '''
 
       // specular component
       vec3 halfAngle = normalize(uLightDirection + cameraDirection);
-      float specularWeight = pow( max(0.0, dot(halfAngle, norm)) , uShininess );
+      float specularWeight = pow( max(0.001, dot(halfAngle, norm)) , uShininess );
       //float specularWeight = pow( max(0.0, dot(reflect(-uLightDirection, norm), cameraDirection)) , uShininess ); // another definition
       vec3 specular = specularWeight * uSpecularColor;
 
