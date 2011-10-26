@@ -1,108 +1,104 @@
 (function() {
-  var interpolateBezier, interpolateLinear, ipfunc, ipfuncd, previousRegisteredFrame;
+  var ModelMotion, bezierp, fraction, ipfunc, ipfuncd, lerp1, previousRegisteredFrame;
 
   MMD.MotionManager = (function() {
 
     function MotionManager() {
-      this.bones = {};
-      this.morphs = {};
-      this.morphFrames = {};
-      this.camera = null;
-      this.cameraFrames = null;
-      this.light = null;
-      this.lightFrames = null;
+      this.modelMotions = [];
+      this.cameraMotion = [];
+      this.cameraFrames = [];
+      this.lightMotion = [];
+      this.lightFrames = [];
       this.lastFrame = 0;
       return;
     }
 
-    MotionManager.prototype.addMotion = function(motion) {
-      this.addMorphMotion(motion);
-      this.addCameraMotoin(motion);
-      return this.addLightMotoin(motion);
+    MotionManager.prototype.addModelMotion = function(model, motion, merge_flag, frame_offset) {
+      var i, mm, _len, _ref;
+      _ref = this.modelMotions;
+      for (i = 0, _len = _ref.length; i < _len; i++) {
+        mm = _ref[i];
+        if (model === mm.model) break;
+      }
+      if (i === this.modelMotions.length) {
+        mm = new ModelMotion(model);
+        this.modelMotions.push(mm);
+      }
+      mm.addBoneMotion(motion.bone, merge_flag, frame_offset);
+      mm.addMorphMotion(motion.morph, merge_flag, frame_offset);
+      this.lastFrame = mm.lastFrame;
     };
 
-    MotionManager.prototype.addMorphMotion = function(motion) {
-      var m, name, _i, _len, _ref;
-      _ref = motion.morph;
-      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-        m = _ref[_i];
-        if (m.name === 'base') continue;
-        if (!this.morphs[m.name]) this.morphs[m.name] = [0];
-        this.morphs[m.name][m.frame] = m.weight;
-        if (this.lastFrame < m.frame) this.lastFrame = m.frame;
+    MotionManager.prototype.getModelFrame = function(model, frame) {
+      var i, mm, _len, _ref;
+      _ref = this.modelMotions;
+      for (i = 0, _len = _ref.length; i < _len; i++) {
+        mm = _ref[i];
+        if (model === mm.model) break;
       }
-      for (name in this.morphs) {
-        this.morphFrames[name] = Object.keys(this.morphs[name]).map(Number).sort(function(a, b) {
-          return a - b;
-        });
-      }
-    };
-
-    MotionManager.prototype.addCameraMotoin = function(motion) {
-      var c, frames, _i, _len, _ref;
-      if (motion.camera.length === 0) return;
-      this.camera = [];
-      frames = [];
-      _ref = motion.camera;
-      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-        c = _ref[_i];
-        this.camera[c.frame] = c;
-        frames.push(c.frame);
-        if (this.lastFrame < c.frame) this.lastFrame = c.frame;
-      }
-      this.cameraFrames = frames.sort(function(a, b) {
-        return a - b;
-      });
-    };
-
-    MotionManager.prototype.addLightMotoin = function(motion) {
-      var frames, l, _i, _len, _ref;
-      if (motion.light.length === 0) return;
-      this.light = [];
-      frames = [];
-      _ref = motion.light;
-      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-        l = _ref[_i];
-        this.light[l.frame] = l;
-        frames.push(l.frame);
-        if (this.lastFrame < l.frame) this.lastFrame = l.frame;
-      }
-      this.lightFrames = frames.sort(function(a, b) {
-        return a - b;
-      });
-    };
-
-    MotionManager.prototype.getFrame = function(frame) {
+      if (i === this.modelMotions.length) return {};
       return {
-        morphs: this.getMorphFrame(frame),
+        bones: mm.getBoneFrame(frame),
+        morphs: mm.getMorphFrame(frame)
+      };
+    };
+
+    MotionManager.prototype.addCameraLightMotion = function(motion, merge_flag, frame_offset) {
+      this.addCameraMotoin(motion.camera, merge_flag, frame_offset);
+      this.addLightMotoin(motion.light, merge_flag, frame_offset);
+    };
+
+    MotionManager.prototype.getCameraLightFrame = function(frame) {
+      return {
         camera: this.getCameraFrame(frame),
         light: this.getLightFrame(frame)
       };
     };
 
-    MotionManager.prototype.getMorphFrame = function(frame) {
-      var frames, idx, lastFrame, morphs, n, name, p, timeline;
-      morphs = {};
-      for (name in this.morphs) {
-        timeline = this.morphs[name];
-        frames = this.morphFrames[name];
-        lastFrame = frames[frames.length - 1];
-        if (lastFrame <= frame) {
-          morphs[name] = timeline[lastFrame];
-        } else {
-          idx = previousRegisteredFrame(frames, frame);
-          p = frames[idx];
-          n = frames[idx + 1];
-          morphs[name] = interpolateLinear(p, n, timeline[p], timeline[n], frame);
-        }
+    MotionManager.prototype.addCameraMotoin = function(camera, merge_flag, frame_offset) {
+      var c, frame, _i, _len;
+      if (camera.length === 0) return;
+      if (!merge_flag) {
+        this.cameraMotion = [];
+        this.cameraFrames = [];
       }
-      return morphs;
+      frame_offset = frame_offset || 0;
+      for (_i = 0, _len = camera.length; _i < _len; _i++) {
+        c = camera[_i];
+        frame = c.frame + frame_offset;
+        this.cameraMotion[frame] = c;
+        this.cameraFrames.push(frame);
+        if (this.lastFrame < frame) this.lastFrame = frame;
+      }
+      this.cameraFrames = this.cameraFrames.sort(function(a, b) {
+        return a - b;
+      });
+    };
+
+    MotionManager.prototype.addLightMotoin = function(light, merge_flag, frame_offset) {
+      var frame, l, _i, _len;
+      if (light.length === 0) return;
+      if (!merge_flag) {
+        this.lightMotion = [];
+        this.lightFrames = [];
+      }
+      frame_offset = frame_offset || 0;
+      for (_i = 0, _len = light.length; _i < _len; _i++) {
+        l = light[_i];
+        frame = l.frame + frame_offset;
+        this.lightMotion[frame] = l;
+        this.lightFrames.push(frame);
+        if (this.lastFrame < frame) this.lastFrame = frame;
+      }
+      this.lightFrames = this.lightFrames.sort(function(a, b) {
+        return a - b;
+      });
     };
 
     MotionManager.prototype.getCameraFrame = function(frame) {
-      var cache, camera, frames, idx, interpolated_x, lastFrame, n, next, p, prev, timeline;
-      if (!this.camera) return null;
-      timeline = this.camera;
+      var bez, cache, camera, frac, frames, idx, lastFrame, n, next, p, prev, timeline;
+      if (!this.cameraMotion.length) return null;
+      timeline = this.cameraMotion;
       frames = this.cameraFrames;
       lastFrame = frames[frames.length - 1];
       if (lastFrame <= frame) {
@@ -111,32 +107,35 @@
         idx = previousRegisteredFrame(frames, frame);
         p = frames[idx];
         n = frames[idx + 1];
+        frac = fraction(frame, p, n);
         prev = timeline[p];
         next = timeline[n];
         cache = [];
-        interpolated_x = function(i) {
-          var X1, X2, Y1, Y2, a, id, _ref;
-          _ref = Array.prototype.slice.call(next.interpolation, i * 4, i * 4 + 4), X1 = _ref[0], X2 = _ref[1], Y1 = _ref[2], Y2 = _ref[3];
+        bez = function(i) {
+          var X1, X2, Y1, Y2, id;
+          X1 = next.interpolation[i * 4];
+          X2 = next.interpolation[i * 4 + 1];
+          Y1 = next.interpolation[i * 4 + 2];
+          Y2 = next.interpolation[i * 4 + 3];
           id = X1 | (X2 << 8) | (Y1 << 16) | (Y2 << 24);
           if (cache[id] != null) return cache[id];
-          if (X1 === Y1 && X2 === Y2) return cache[id] = frame;
-          a = interpolateBezier(X1 / 127, X2 / 127, Y1 / 127, Y2 / 127, (frame - p) / (n - p));
-          return cache[id] = p + (n - p) * a;
+          if (X1 === Y1 && X2 === Y2) return cache[id] = frac;
+          return cache[id] = bezierp(X1 / 127, X2 / 127, Y1 / 127, Y2 / 127, frac);
         };
         camera = {
-          location: [interpolateLinear(p, n, prev.location[0], next.location[0], interpolated_x(0)), interpolateLinear(p, n, prev.location[1], next.location[1], interpolated_x(1)), interpolateLinear(p, n, prev.location[2], next.location[2], interpolated_x(2))],
-          rotation: [interpolateLinear(p, n, prev.rotation[0], next.rotation[0], interpolated_x(3)), interpolateLinear(p, n, prev.rotation[1], next.rotation[1], interpolated_x(3)), interpolateLinear(p, n, prev.rotation[2], next.rotation[2], interpolated_x(3))],
-          distance: interpolateLinear(p, n, prev.distance, next.distance, interpolated_x(4)),
-          view_angle: interpolateLinear(p, n, prev.view_angle, next.view_angle, interpolated_x(5))
+          location: vec3.createLerp3(prev.location, next.location, [bez(0), bez(1), bez(2)]),
+          rotation: vec3.createLerp(prev.rotation, next.rotation, bez(3)),
+          distance: lerp1(prev.distance, next.distance, bez(4)),
+          view_angle: lerp1(prev.view_angle, next.view_angle, bez(5))
         };
       }
       return camera;
     };
 
     MotionManager.prototype.getLightFrame = function(frame) {
-      var frames, idx, lastFrame, light, n, p, timeline;
-      if (!this.light) return null;
-      timeline = this.light;
+      var frac, frames, idx, lastFrame, light, n, next, p, prev, timeline;
+      if (!this.lightMotion.length) return null;
+      timeline = this.lightMotion;
       frames = this.lightFrames;
       lastFrame = frames[frames.length - 1];
       if (lastFrame <= frame) {
@@ -145,15 +144,142 @@
         idx = previousRegisteredFrame(frames, frame);
         p = frames[idx];
         n = frames[idx + 1];
+        frac = fraction(frame, p, n);
+        prev = timeline[p];
+        next = timeline[n];
         light = {
-          color: [interpolateLinear(p, n, timeline[p].color[0], timeline[n].color[0], frame), interpolateLinear(p, n, timeline[p].color[1], timeline[n].color[1], frame), interpolateLinear(p, n, timeline[p].color[2], timeline[n].color[2], frame)],
-          location: [interpolateLinear(p, n, timeline[p].location[0], timeline[n].location[0], frame), interpolateLinear(p, n, timeline[p].location[1], timeline[n].location[1], frame), interpolateLinear(p, n, timeline[p].location[2], timeline[n].location[2], frame)]
+          color: vec3.createLerp(prev.color, next.color, frac),
+          location: vec3.lerp(prev.location, next.location, frac)
         };
       }
       return light;
     };
 
     return MotionManager;
+
+  })();
+
+  ModelMotion = (function() {
+
+    function ModelMotion(model) {
+      this.model = model;
+      this.boneMotions = {};
+      this.boneFrames = {};
+      this.morphMotions = {};
+      this.morphFrames = {};
+      this.lastFrame = 0;
+    }
+
+    ModelMotion.prototype.addBoneMotion = function(bone, merge_flag, frame_offset) {
+      var b, frame, name, _i, _len;
+      if (!merge_flag) {
+        this.boneMotions = {};
+        this.boneFrames = {};
+      }
+      frame_offset = frame_offset || 0;
+      for (_i = 0, _len = bone.length; _i < _len; _i++) {
+        b = bone[_i];
+        if (!this.boneMotions[b.name]) {
+          this.boneMotions[b.name] = [
+            {
+              location: vec3.create(),
+              rotation: quat4.create([0, 0, 0, 1])
+            }
+          ];
+        }
+        frame = b.frame + frame_offset;
+        this.boneMotions[b.name][frame] = b;
+        if (this.lastFrame < frame) this.lastFrame = frame;
+      }
+      for (name in this.boneMotions) {
+        this.boneFrames[name] = (this.boneFrames[name] || []).concat(Object.keys(this.boneMotions[name]).map(Number)).sort(function(a, b) {
+          return a - b;
+        });
+      }
+    };
+
+    ModelMotion.prototype.addMorphMotion = function(morph, merge_flag, frame_offset) {
+      var frame, m, name, _i, _len;
+      if (!merge_flag) {
+        this.morphMotions = {};
+        this.morphFrames = {};
+      }
+      frame_offset = frame_offset || 0;
+      for (_i = 0, _len = morph.length; _i < _len; _i++) {
+        m = morph[_i];
+        if (m.name === 'base') continue;
+        if (!this.morphMotions[m.name]) this.morphMotions[m.name] = [0];
+        frame = m.frame + frame_offset;
+        this.morphMotions[m.name][frame] = m.weight;
+        if (this.lastFrame < frame) this.lastFrame = frame;
+      }
+      for (name in this.morphMotions) {
+        this.morphFrames[name] = (this.morphFrames[name] || []).concat(Object.keys(this.morphMotions[name]).map(Number)).sort(function(a, b) {
+          return a - b;
+        });
+      }
+    };
+
+    ModelMotion.prototype.getBoneFrame = function(frame) {
+      var bez, bones, cache, frac, frames, idx, lastFrame, n, name, next, p, prev, timeline;
+      bones = {};
+      for (name in this.boneMotions) {
+        timeline = this.boneMotions[name];
+        frames = this.boneFrames[name];
+        lastFrame = frames[frames.length - 1];
+        if (lastFrame <= frame) {
+          bones[name] = timeline[lastFrame];
+        } else {
+          idx = previousRegisteredFrame(frames, frame);
+          p = frames[idx];
+          n = frames[idx + 1];
+          frac = fraction(frame, p, n);
+          prev = timeline[p];
+          next = timeline[n];
+          cache = [];
+          bez = function(i) {
+            var X1, X2, Y1, Y2, id;
+            X1 = next.interpolation[i * 4];
+            X2 = next.interpolation[i * 4 + 1];
+            Y1 = next.interpolation[i * 4 + 2];
+            Y2 = next.interpolation[i * 4 + 3];
+            id = X1 | (X2 << 8) | (Y1 << 16) | (Y2 << 24);
+            if (cache[id] != null) return cache[id];
+            if (X1 === Y1 && X2 === Y2) return cache[id] = frac;
+            return cache[id] = bezierp(X1 / 127, X2 / 127, Y1 / 127, Y2 / 127, frac);
+          };
+          bones[name] = {
+            location: vec3.createLerp3(prev.location, next.location, [bez(0), bez(1), bez(2)]),
+            rotation: quat4.createSlerp(prev.rotation, next.rotation, bez(3))
+          };
+        }
+      }
+      return bones;
+    };
+
+    ModelMotion.prototype.getMorphFrame = function(frame) {
+      var frac, frames, idx, lastFrame, morphs, n, name, next, p, prev, timeline;
+      morphs = {};
+      for (name in this.morphMotions) {
+        timeline = this.morphMotions[name];
+        frames = this.morphFrames[name];
+        lastFrame = frames[frames.length - 1];
+        if (lastFrame <= frame) {
+          morphs[name] = timeline[lastFrame];
+        } else {
+          idx = previousRegisteredFrame(frames, frame);
+          p = frames[idx];
+          n = frames[idx + 1];
+          frac = fraction(frame, p, n);
+          prev = timeline[p];
+          next = timeline[n];
+          morphs[name] = lerp1(prev, next, frac);
+        }
+      }
+      return morphs;
+    };
+
+    return ModelMotion;
 
   })();
 
@@ -180,11 +306,15 @@
     return idx;
   };
 
-  interpolateLinear = function(x1, x2, y1, y2, x) {
-    return (y2 * (x - x1) + y1 * (x2 - x)) / (x2 - x1);
+  fraction = function(x, x0, x1) {
+    return (x - x0) / (x1 - x0);
   };
 
-  interpolateBezier = function(x1, x2, y1, y2, x) {
+  lerp1 = function(x0, x1, a) {
+    return x0 + a * (x1 - x0);
+  };
+
+  bezierp = function(x1, x2, y1, y2, x) {
     /*
         interpolate using Bezier curve (http://musashi.or.tv/fontguide_doc3.htm)
         Bezier curve is parametrized by t (0 <= t <= 1)

@@ -1,81 +1,84 @@
 class MMD.MotionManager
   constructor: ->
-    @bones = {}
-    @morphs = {}
-    @morphFrames = {}
-    @camera = null
-    @cameraFrames = null
-    @light = null
-    @lightFrames = null
+    @modelMotions = []
+    @cameraMotion = []
+    @cameraFrames = []
+    @lightMotion = []
+    @lightFrames = []
     @lastFrame = 0
     return
 
-  addMotion: (motion) ->
-    @addMorphMotion(motion)
-    @addCameraMotoin(motion)
-    @addLightMotoin(motion)
+  addModelMotion: (model, motion, merge_flag, frame_offset) ->
+    for mm, i in @modelMotions
+      break if model == mm.model
 
-  addMorphMotion: (motion) ->
-    for m in motion.morph
-      continue if m.name == 'base'
-      @morphs[m.name] = [0] if !@morphs[m.name] # set 0th frame as 0
-      @morphs[m.name][m.frame] = m.weight
-      @lastFrame = m.frame if @lastFrame < m.frame
+    if i == @modelMotions.length
+      mm = new ModelMotion(model)
+      @modelMotions.push(mm)
 
-    for name of @morphs
-      @morphFrames[name] = Object.keys(@morphs[name]).map(Number).sort((a,b) -> a - b)
+    mm.addBoneMotion(motion.bone, merge_flag, frame_offset)
+    mm.addMorphMotion(motion.morph, merge_flag, frame_offset)
 
+    @lastFrame = mm.lastFrame
     return
 
-  addCameraMotoin: (motion) ->
-    return if motion.camera.length == 0
-    @camera = []
-    frames = []
-    for c in motion.camera
-      @camera[c.frame] = c
-      frames.push(c.frame)
-      @lastFrame = c.frame if @lastFrame < c.frame
-    @cameraFrames = frames.sort((a, b) -> a - b)
-    return
+  getModelFrame: (model, frame) ->
+    for mm, i in @modelMotions
+      break if model == mm.model
 
-  addLightMotoin: (motion) ->
-    return if motion.light.length == 0
-    @light = []
-    frames = []
-    for l in motion.light
-      @light[l.frame] = l
-      frames.push(l.frame)
-      @lastFrame = l.frame if @lastFrame < l.frame
-    @lightFrames = frames.sort((a, b) -> a - b)
-    return
+    return {} if i == @modelMotions.length
 
-  getFrame: (frame) ->
     return {
-      morphs: @getMorphFrame(frame)
+      bones: mm.getBoneFrame(frame)
+      morphs: mm.getMorphFrame(frame)
+    }
+
+  addCameraLightMotion: (motion, merge_flag, frame_offset) ->
+    @addCameraMotoin(motion.camera, merge_flag, frame_offset)
+    @addLightMotoin(motion.light, merge_flag, frame_offset)
+    return
+
+  getCameraLightFrame: (frame) ->
+    return {
       camera: @getCameraFrame(frame)
       light: @getLightFrame(frame)
     }
 
-  getMorphFrame: (frame) ->
-    morphs = {}
+  addCameraMotoin: (camera, merge_flag, frame_offset) ->
+    return if camera.length == 0
+    if not merge_flag
+      @cameraMotion = []
+      @cameraFrames = []
 
-    for name of @morphs
-      timeline = @morphs[name]
-      frames = @morphFrames[name]
-      lastFrame = frames[frames.length - 1]
-      if lastFrame <= frame
-        morphs[name] = timeline[lastFrame]
-      else
-        idx = previousRegisteredFrame(frames, frame)
-        p = frames[idx]
-        n = frames[idx + 1]
-        morphs[name] = interpolateLinear(p, n, timeline[p], timeline[n], frame)
+    frame_offset = frame_offset || 0
 
-    return morphs
+    for c in camera
+      frame = c.frame + frame_offset
+      @cameraMotion[frame] = c
+      @cameraFrames.push(frame)
+      @lastFrame = frame if @lastFrame < frame
+    @cameraFrames = @cameraFrames.sort((a, b) -> a - b)
+    return
+
+  addLightMotoin: (light, merge_flag, frame_offset) ->
+    return if light.length == 0
+    if not merge_flag
+      @lightMotion = []
+      @lightFrames = []
+
+    frame_offset = frame_offset || 0
+
+    for l in light
+      frame = l.frame + frame_offset
+      @lightMotion[frame] = l
+      @lightFrames.push(frame)
+      @lastFrame = frame if @lastFrame < frame
+    @lightFrames = @lightFrames.sort((a, b) -> a - b)
+    return
 
   getCameraFrame: (frame) ->
-    return null if not @camera
-    timeline = @camera
+    return null if not @cameraMotion.length
+    timeline = @cameraMotion
     frames = @cameraFrames
     lastFrame = frames[frames.length - 1]
     if lastFrame <= frame
@@ -84,38 +87,33 @@ class MMD.MotionManager
       idx = previousRegisteredFrame(frames, frame)
       p = frames[idx]
       n = frames[idx + 1]
+      frac = fraction(frame, p, n)
       prev = timeline[p] # previous registered frame
       next = timeline[n] # next registered frame
 
       cache = []
-      interpolated_x = (i)->
-        [X1, X2, Y1, Y2] = Array.prototype.slice.call(next.interpolation, i * 4, i * 4 + 4)
+      bez = (i)->
+        X1 = next.interpolation[i * 4    ]
+        X2 = next.interpolation[i * 4 + 1]
+        Y1 = next.interpolation[i * 4 + 2]
+        Y2 = next.interpolation[i * 4 + 3]
         id = X1 | (X2 << 8) | (Y1 << 16) | (Y2 << 24)
         return cache[id] if cache[id]?
-        return cache[id] = frame if X1 == Y1 and X2 == Y2
-        a = interpolateBezier(X1 / 127, X2 / 127, Y1 / 127, Y2 / 127, (frame - p) / (n - p))
-        return cache[id] = p + (n - p) * a
+        return cache[id] = frac if X1 == Y1 and X2 == Y2
+        return cache[id] = bezierp(X1 / 127, X2 / 127, Y1 / 127, Y2 / 127, frac)
 
       camera = {
-        location: [
-          interpolateLinear(p, n, prev.location[0], next.location[0], interpolated_x(0))
-          interpolateLinear(p, n, prev.location[1], next.location[1], interpolated_x(1))
-          interpolateLinear(p, n, prev.location[2], next.location[2], interpolated_x(2))
-        ]
-        rotation: [
-          interpolateLinear(p, n, prev.rotation[0], next.rotation[0], interpolated_x(3))
-          interpolateLinear(p, n, prev.rotation[1], next.rotation[1], interpolated_x(3))
-          interpolateLinear(p, n, prev.rotation[2], next.rotation[2], interpolated_x(3))
-        ]
-        distance: interpolateLinear(p, n, prev.distance, next.distance, interpolated_x(4))
-        view_angle: interpolateLinear(p, n, prev.view_angle, next.view_angle, interpolated_x(5))
+        location: vec3.createLerp3(prev.location, next.location, [bez(0), bez(1), bez(2)])
+        rotation: vec3.createLerp(prev.rotation, next.rotation, bez(3))
+        distance: lerp1(prev.distance, next.distance, bez(4))
+        view_angle: lerp1(prev.view_angle, next.view_angle, bez(5))
       }
 
     return camera
 
   getLightFrame: (frame) ->
-    return null if not @light
-    timeline = @light
+    return null if not @lightMotion.length
+    timeline = @lightMotion
     frames = @lightFrames
     lastFrame = frames[frames.length - 1]
     if lastFrame <= frame
@@ -124,20 +122,122 @@ class MMD.MotionManager
       idx = previousRegisteredFrame(frames, frame)
       p = frames[idx]
       n = frames[idx + 1]
+      frac = fraction(frame, p, n)
+      prev = timeline[p] # previous registered frame
+      next = timeline[n] # next registered frame
+
       light = {
-        color: [
-          interpolateLinear(p, n, timeline[p].color[0], timeline[n].color[0], frame)
-          interpolateLinear(p, n, timeline[p].color[1], timeline[n].color[1], frame)
-          interpolateLinear(p, n, timeline[p].color[2], timeline[n].color[2], frame)
-        ]
-        location: [
-          interpolateLinear(p, n, timeline[p].location[0], timeline[n].location[0], frame)
-          interpolateLinear(p, n, timeline[p].location[1], timeline[n].location[1], frame)
-          interpolateLinear(p, n, timeline[p].location[2], timeline[n].location[2], frame)
-        ]
+        color: vec3.createLerp(prev.color, next.color, frac)
+        location: vec3.lerp(prev.location, next.location, frac)
       }
 
     return light
+
+class ModelMotion
+  constructor: (@model) ->
+    @boneMotions = {}
+    @boneFrames = {}
+    @morphMotions = {}
+    @morphFrames = {}
+    @lastFrame = 0
+
+  addBoneMotion: (bone, merge_flag, frame_offset) ->
+    if not merge_flag
+      @boneMotions = {}
+      @boneFrames = {}
+
+    frame_offset = frame_offset || 0
+
+    for b in bone
+      if not @boneMotions[b.name] # set 0th frame
+        @boneMotions[b.name] = [{location: vec3.create(), rotation: quat4.create([0, 0, 0, 1])}]
+
+      frame = b.frame + frame_offset
+      @boneMotions[b.name][frame] = b
+      @lastFrame = frame if @lastFrame < frame
+
+    for name of @boneMotions
+      @boneFrames[name] = (@boneFrames[name] || []).
+        concat(Object.keys(@boneMotions[name]).map(Number)).sort((a,b) -> a - b)
+
+    return
+
+  addMorphMotion: (morph, merge_flag, frame_offset) ->
+    if not merge_flag
+      @morphMotions = {}
+      @morphFrames = {}
+
+    frame_offset = frame_offset || 0
+
+    for m in morph
+      continue if m.name == 'base'
+      @morphMotions[m.name] = [0] if !@morphMotions[m.name] # set 0th frame as 0
+      frame = m.frame + frame_offset
+      @morphMotions[m.name][frame] = m.weight
+      @lastFrame = frame if @lastFrame < frame
+
+    for name of @morphMotions
+      @morphFrames[name] = (@morphFrames[name] || []).
+        concat(Object.keys(@morphMotions[name]).map(Number)).sort((a,b) -> a - b)
+
+    return
+
+  getBoneFrame: (frame) ->
+    bones = {}
+
+    for name of @boneMotions
+      timeline = @boneMotions[name]
+      frames = @boneFrames[name]
+      lastFrame = frames[frames.length - 1]
+      if lastFrame <= frame
+        bones[name] = timeline[lastFrame]
+      else
+        idx = previousRegisteredFrame(frames, frame)
+        p = frames[idx]
+        n = frames[idx + 1]
+        frac = fraction(frame, p, n)
+        prev = timeline[p]
+        next = timeline[n]
+
+        cache = []
+        bez = (i)->
+          X1 = next.interpolation[i * 4    ]
+          X2 = next.interpolation[i * 4 + 1]
+          Y1 = next.interpolation[i * 4 + 2]
+          Y2 = next.interpolation[i * 4 + 3]
+          id = X1 | (X2 << 8) | (Y1 << 16) | (Y2 << 24)
+          return cache[id] if cache[id]?
+          return cache[id] = frac if X1 == Y1 and X2 == Y2
+          return cache[id] = bezierp(X1 / 127, X2 / 127, Y1 / 127, Y2 / 127, frac)
+
+        bones[name] = {
+          location: vec3.createLerp3(prev.location, next.location, [bez(0), bez(1), bez(2)])
+          rotation: quat4.createSlerp(prev.rotation, next.rotation, bez(3))
+        }
+
+    return bones
+
+  getMorphFrame: (frame) ->
+    morphs = {}
+
+    for name of @morphMotions
+      timeline = @morphMotions[name]
+      frames = @morphFrames[name]
+      lastFrame = frames[frames.length - 1]
+      if lastFrame <= frame
+        morphs[name] = timeline[lastFrame]
+      else
+        idx = previousRegisteredFrame(frames, frame)
+        p = frames[idx]
+        n = frames[idx + 1]
+        frac = fraction(frame, p, n)
+        prev = timeline[p] # previous registered frame
+        next = timeline[n] # next registered frame
+
+        morphs[name] = lerp1(prev, next, frac)
+
+    return morphs
+
 
 # utils
 previousRegisteredFrame = (frames, frame) ->
@@ -159,11 +259,13 @@ previousRegisteredFrame = (frames, frame) ->
       break if delta == 1 and frames[idx] <= frame
   return idx
 
-interpolateLinear = (x1, x2, y1, y2, x) ->
-  # when using this function, make sure x1 < x2
-  return (y2 * (x - x1) + y1 * (x2 - x)) / (x2 - x1)
+fraction = (x, x0, x1) ->
+  return (x - x0) / (x1 - x0)
 
-interpolateBezier = (x1, x2, y1, y2, x) ->
+lerp1 = (x0, x1, a) ->
+  return x0 + a * (x1 - x0)
+
+bezierp = (x1, x2, y1, y2, x) ->
   ###
     interpolate using Bezier curve (http://musashi.or.tv/fontguide_doc3.htm)
     Bezier curve is parametrized by t (0 <= t <= 1)

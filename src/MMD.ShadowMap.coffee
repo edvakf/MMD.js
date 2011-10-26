@@ -32,10 +32,6 @@ class MMD.ShadowMap
     gl.bindRenderbuffer(gl.RENDERBUFFER, null)
     gl.bindFramebuffer(gl.FRAMEBUFFER, null)
 
-  generate: ->
-    @computeMatrices()
-    @render()
-
   computeMatrices: ->
     # from mmd's vectors and matrices, calculate the "light" space's transform matrices
 
@@ -55,8 +51,9 @@ class MMD.ShadowMap
     mat4.multiplyVec3(viewMatrix, center) # transform center in view space
     cx = center[0]; cy = center[1]
     @pMatrix = mat4.ortho(cx - size, cx + size, cy - size, cy + size, -size, size) # orthographic projection; near can be negative
+    return
 
-  render: ->
+  beforeRender: ->
     gl = @mmd.gl
     program = @mmd.program
 
@@ -69,10 +66,11 @@ class MMD.ShadowMap
     gl.uniformMatrix4fv(program.uMVMatrix, false, @mvMatrix)
     gl.uniformMatrix4fv(program.uPMatrix, false, @pMatrix)
 
-    gl.enable(gl.CULL_FACE)
-    gl.cullFace(gl.BACK)
-    gl.drawElements(gl.TRIANGLES, @mmd.model.triangles.length, gl.UNSIGNED_SHORT, 0)
-    gl.disable(gl.CULL_FACE)
+    return
+
+  afterRender: ->
+    gl = @mmd.gl
+    program = @mmd.program
 
     gl.uniform1i(program.uGenerateShadowMap, false)
 
@@ -80,6 +78,7 @@ class MMD.ShadowMap
     gl.generateMipmap(gl.TEXTURE_2D)
     gl.bindTexture(gl.TEXTURE_2D, null)
     @debugTexture() if (@debug)
+    return
 
   getLightMatrix: ->
     # display matrix transforms projection space to screen space. in fragment shader screen coordinates are available as gl_FragCoord

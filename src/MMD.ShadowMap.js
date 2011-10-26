@@ -32,11 +32,6 @@
       return gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     };
 
-    ShadowMap.prototype.generate = function() {
-      this.computeMatrices();
-      return this.render();
-    };
-
     ShadowMap.prototype.computeMatrices = function() {
       var cameraPosition, center, cx, cy, lengthScale, lightDirection, size, viewMatrix;
       center = vec3.create(this.mmd.center);
@@ -50,10 +45,10 @@
       mat4.multiplyVec3(viewMatrix, center);
       cx = center[0];
       cy = center[1];
-      return this.pMatrix = mat4.ortho(cx - size, cx + size, cy - size, cy + size, -size, size);
+      this.pMatrix = mat4.ortho(cx - size, cx + size, cy - size, cy + size, -size, size);
     };
 
-    ShadowMap.prototype.render = function() {
+    ShadowMap.prototype.beforeRender = function() {
       var gl, program;
       gl = this.mmd.gl;
       program = this.mmd.program;
@@ -63,15 +58,17 @@
       gl.uniform1i(program.uGenerateShadowMap, true);
       gl.uniformMatrix4fv(program.uMVMatrix, false, this.mvMatrix);
       gl.uniformMatrix4fv(program.uPMatrix, false, this.pMatrix);
-      gl.enable(gl.CULL_FACE);
-      gl.cullFace(gl.BACK);
-      gl.drawElements(gl.TRIANGLES, this.mmd.model.triangles.length, gl.UNSIGNED_SHORT, 0);
-      gl.disable(gl.CULL_FACE);
+    };
+
+    ShadowMap.prototype.afterRender = function() {
+      var gl, program;
+      gl = this.mmd.gl;
+      program = this.mmd.program;
       gl.uniform1i(program.uGenerateShadowMap, false);
       gl.bindTexture(gl.TEXTURE_2D, this.texture);
       gl.generateMipmap(gl.TEXTURE_2D);
       gl.bindTexture(gl.TEXTURE_2D, null);
-      if (this.debug) return this.debugTexture();
+      if (this.debug) this.debugTexture();
     };
 
     ShadowMap.prototype.getLightMatrix = function() {

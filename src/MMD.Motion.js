@@ -148,7 +148,7 @@
       offset += size_Float32;
       tmp[1] = view.getFloat32(offset, true);
       offset += size_Float32;
-      tmp[2] = view.getFloat32(offset, true);
+      tmp[2] = -view.getFloat32(offset, true);
       offset += size_Float32;
       this.location = new Float32Array(tmp);
       tmp[0] = -view.getFloat32(offset, true);

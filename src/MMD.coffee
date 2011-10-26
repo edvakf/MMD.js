@@ -37,7 +37,7 @@ class this.MMD
       for line in src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '').split(';')
         type = line.match(/^\s*(uniform|attribute)\s+/)?[1]
         continue if not type
-        name = line.match(/(\w+)\s*$/)[1]
+        name = line.match(/(\w+)(\[\d+\])?\s*$/)[1]
         attributes.push(name) if type is 'attribute' and name not in attributes
         uniforms.push(name) if type is 'uniform' and name not in uniforms
 
@@ -55,7 +55,9 @@ class this.MMD
     return
 
   initBuffers: ->
+    @vbuffers = {}
     @initVertices()
+    @initBones()
     @initIndices()
     @initTextures()
     return
@@ -81,17 +83,60 @@ class this.MMD
       edge[i] = 1 - vertex.edge_flag
     model.positions = positions
 
-    @vbuffers =
-      for data in [
-        {attribute: 'aVertexPosition', array: positions, size: 3},
-        {attribute: 'aVertexNormal', array: normals, size: 3},
-        {attribute: 'aTextureCoord', array: uvs, size: 2},
-        {attribute: 'aVertexEdge', array: edge, size: 1},
-      ]
-        buffer = @gl.createBuffer()
-        @gl.bindBuffer(@gl.ARRAY_BUFFER, buffer)
-        @gl.bufferData(@gl.ARRAY_BUFFER, data.array, @gl.STATIC_DRAW)
-        {attribute: data.attribute, size: data.size, buffer: buffer}
+    for data in [
+      {attribute: 'aVertexPosition', array: positions, size: 3},
+      {attribute: 'aVertexNormal', array: normals, size: 3},
+      {attribute: 'aTextureCoord', array: uvs, size: 2},
+      {attribute: 'aVertexEdge', array: edge, size: 1},
+    ]
+      buffer = @gl.createBuffer()
+      @gl.bindBuffer(@gl.ARRAY_BUFFER, buffer)
+      @gl.bufferData(@gl.ARRAY_BUFFER, data.array, @gl.STATIC_DRAW)
+      @vbuffers[data.attribute] = {size: data.size, buffer: buffer}
+
+    @gl.bindBuffer(@gl.ARRAY_BUFFER, null)
+    return
+
+  initBones: ->
+    model = @model
+    verts = model.vertices
+    length = verts.length
+    vertsVisited = new Uint8Array(length)
+    bone1 = new Float32Array(length)
+    bone2 = new Float32Array(length)
+    weights = new Float32Array(length)
+    triangles = model.triangles
+    offset = 0
+
+    for material in model.materials
+      bones = material.bones = []
+      material.startIndex = offset
+
+      for i in [0...material.face_vert_count] by 3
+        for j in [0...3]
+          vertIndex = triangles[offset + i + j]
+          continue if vertsVisited[vertIndex] == 1
+          vertsVisited[vertIndex] = 1
+          vert = verts[vertIndex]
+          weights[vertIndex] = vert.bone_weight / 100
+          idx = bones.indexOf(vert.bone_num1)
+          idx = bones.push(vert.bone_num1) - 1 if idx < 0
+          bone1[vertIndex] = idx
+          idx = bones.indexOf(vert.bone_num2)
+          idx = bones.push(vert.bone_num2) - 1 if idx < 0
+          bone2[vertIndex] = idx
+
+      material.endIndex = (offset += material.face_vert_count)
+
+    for data in [
+      {attribute: 'aBone1', array: bone1, size: 1},
+      {attribute: 'aBone2', array: bone2, size: 1},
+      {attribute: 'aBoneWeight', array: weights, size: 1},
+    ]
+      buffer = @gl.createBuffer()
+      @gl.bindBuffer(@gl.ARRAY_BUFFER, buffer)
+      @gl.bufferData(@gl.ARRAY_BUFFER, data.array, @gl.STATIC_DRAW)
+      @vbuffers[data.attribute] = {size: data.size, buffer: buffer}
 
     @gl.bindBuffer(@gl.ARRAY_BUFFER, null)
     return
@@ -161,10 +206,15 @@ class this.MMD
 
   move: ->
     return if not @playing
-    @frame++
-    model = @model
+    if ++@frame > @motionManager.lastFrame
+      @pause()
+      return
 
-    {bones, morphs, camera, light} = @motionManager.getFrame(@frame)
+    @moveCameraLight()
+    @moveModel()
+
+  moveCameraLight: ->
+    {camera, light} = @motionManager.getCameraLightFrame(@frame)
 
     if camera
       @distance = camera.distance
@@ -177,11 +227,26 @@ class this.MMD
       @lightDirection = light.location
       @lightColor = light.color
 
-    base = model.morphsDict['base']
-    for name of morphs
-      weight = morphs[name]
-      morph = model.morphsDict[name]
-      continue if not morph
+    return
+
+  moveModel: ->
+    model = @model
+    {morphs, bones} = @motionManager.getModelFrame(model, @frame)
+
+    @moveMorphs(model, morphs)
+    @moveBones(model, bones)
+    return
+
+  moveMorphs: (model, morphs) ->
+    return if not morphs
+    return if model.morphs.length == 0
+
+    for morph, j in model.morphs
+      if j == 0
+        base = morph
+        continue
+      continue if morph.name not of morphs
+      weight = morphs[morph.name]
       for vert in morph.vert_data
         b = base.vert_data[vert.index]
         i = b.index
@@ -189,7 +254,7 @@ class this.MMD
         model.positions[3 * i + 1] += vert.y * weight
         model.positions[3 * i + 2] += vert.z * weight
 
-    @gl.bindBuffer(@gl.ARRAY_BUFFER, @vbuffers[0].buffer)
+    @gl.bindBuffer(@gl.ARRAY_BUFFER, @vbuffers.aVertexPosition.buffer)
     @gl.bufferData(@gl.ARRAY_BUFFER, model.positions, @gl.STATIC_DRAW)
     @gl.bindBuffer(@gl.ARRAY_BUFFER, null)
 
@@ -200,7 +265,48 @@ class this.MMD
       model.positions[3 * i + 1] = b.y
       model.positions[3 * i + 2] = b.z
 
-    @pause() if @frame > @motionManager.lastFrame
+    return
+
+  moveBones: (model, bones) ->
+    return if not bones
+
+    boneMotions = {} # {name: {p, r}}
+    for bone in model.bones
+      motion = bones[bone.name]
+      if motion
+        r = motion.rotation
+        t = motion.location
+      else
+        r = quat4.create([0, 0, 0, 1])
+        t = vec3.create([0, 0, 0])
+      parent = bone.parent_bone_index
+      if parent == 0xFFFF # center
+        boneMotions[bone.name] = {p: vec3.add(bone.head_pos, t, vec3.create()), r: r}
+      else
+        parent = model.bones[parent]
+        parentMotion = boneMotions[parent.name]
+        ###
+           the position of bone is found as follows
+           take the ORIGINAL bone_head vector relative to it's parent's ORIGINAL bone_head,
+           add translation to it and rotate by the parent's rotation,
+           then add the parent's position
+           i.e. calculate
+             p_1' = r_2' (p_1 - p_2 + t_1) r_2'^* + p_2'
+           where p_1 and p_2 are it's and the parent's ORIGINAL positions respectively,
+           t_1 is it's own translation, and r_2' is the parent's rotation
+           the children of this bone will be affected by the moved position and
+           combined rotational vector
+             r_1' = r_2' + r_1
+        ###
+        r = quat4.createMultiply(parentMotion.r, r) # r_2' r_1
+        p = vec3.createSubtract(bone.head_pos, parent.head_pos)
+        vec3.add(p, t)
+        vec3.rotateByQuat4(p, parentMotion.r)
+        vec3.add(p, parentMotion.p)
+        boneMotions[bone.name] = {p: p, r: r}
+
+    model.boneMotions = boneMotions
+
     return
 
   computeMatrices: ->
@@ -226,6 +332,21 @@ class this.MMD
     @nMatrix = mat4.inverseTranspose(@mvMatrix, mat4.create())
     return
 
+  reindexBones: (model, bones) ->
+    bonePosOriginal = []
+    bonePosMoved = []
+    boneRotations = []
+    for boneIndex in bones
+      bone = model.bones[boneIndex]
+      bonePosOriginal.push(bone.head_pos[0], bone.head_pos[1], bone.head_pos[2])
+      motion = model.boneMotions[bone.name]
+      boneRotations.push(motion.r[0], motion.r[1], motion.r[2], motion.r[3])
+      bonePosMoved.push(motion.p[0], motion.p[1], motion.p[2])
+    @gl.uniform3fv(@program.uBonePosOriginal, bonePosOriginal)
+    @gl.uniform3fv(@program.uBonePosMoved, bonePosMoved)
+    @gl.uniform4fv(@program.uBoneRotations, boneRotations)
+    return
+
   render: ->
     return if not @redraw and not @playing
     @redraw = false
@@ -234,9 +355,9 @@ class this.MMD
     @gl.viewport(0, 0, @width, @height)
     @gl.clear(@gl.COLOR_BUFFER_BIT | @gl.DEPTH_BUFFER_BIT)
 
-    for vb in @vbuffers
+    for attribute, vb of @vbuffers
       @gl.bindBuffer(@gl.ARRAY_BUFFER, vb.buffer)
-      @gl.vertexAttribPointer(@program[vb.attribute], vb.size, @gl.FLOAT, false, 0, 0)
+      @gl.vertexAttribPointer(@program[attribute], vb.size, @gl.FLOAT, false, 0, 0)
 
     @gl.bindBuffer(@gl.ELEMENT_ARRAY_BUFFER, @ibuffer)
 
@@ -248,12 +369,15 @@ class this.MMD
     @gl.enable(@gl.BLEND)
     @gl.blendFuncSeparate(@gl.SRC_ALPHA, @gl.ONE_MINUS_SRC_ALPHA, @gl.SRC_ALPHA, @gl.DST_ALPHA)
 
-    offset = 0
-    for material,i in @model.materials
-      @renderMaterial(material, offset)
-      @renderEdge(material, offset)
-      # offset is in bytes (size of unsigned short = 2)
-      offset += material.face_vert_count * 2
+    for material in @model.materials
+      if @model.boneMotions
+        @reindexBones(@model, material.bones)
+        @gl.uniform1i(@program.uBoneMotion, true)
+
+      @renderMaterial(material)
+      @renderEdge(material)
+
+      @gl.uniform1i(@program.uBoneMotion, false)
 
     @gl.disable(@gl.CULL_FACE)
     @gl.disable(@gl.BLEND)
@@ -264,18 +388,38 @@ class this.MMD
     return
 
   setSelfShadowTexture: ->
-    if @drawSelfShadow
-      @shadowMap.generate()
+    return if not @drawSelfShadow
 
-      @gl.activeTexture(@gl.TEXTURE3) # 3 -> shadow map
-      @gl.bindTexture(@gl.TEXTURE_2D, @shadowMap.getTexture())
-      @gl.uniform1i(@program.uShadowMap, 3)
-      @gl.uniformMatrix4fv(@program.uLightMatrix, false, @shadowMap.getLightMatrix())
-      @gl.uniform1i(@program.uSelfShadow, true)
+    model = @model
 
-      # reset
-      @gl.bindFramebuffer(@gl.FRAMEBUFFER, null)
-      @gl.viewport(0, 0, @width, @height) # not needed on Windows Chrome but necessary on Mac Chrome
+    @shadowMap.computeMatrices()
+    @shadowMap.beforeRender()
+
+    if @model.boneMotions
+      @gl.uniform1i(@program.uBoneMotion, true)
+
+      for material in model.materials
+        @reindexBones(model, material.bones)
+
+        sectionLength = material.endIndex - material.startIndex
+        offset = material.startIndex * 2 # *2 because it's byte offset
+        @gl.drawElements(@gl.TRIANGLES, sectionLength, @gl.UNSIGNED_SHORT, offset)
+
+      @gl.uniform1i(@program.uBoneMotion, false)
+    else
+      @gl.drawElements(@gl.TRIANGLES, model.triangles.length, @gl.UNSIGNED_SHORT, 0)
+
+    @shadowMap.afterRender()
+
+    @gl.activeTexture(@gl.TEXTURE3) # 3 -> shadow map
+    @gl.bindTexture(@gl.TEXTURE_2D, @shadowMap.getTexture())
+    @gl.uniform1i(@program.uShadowMap, 3)
+    @gl.uniformMatrix4fv(@program.uLightMatrix, false, @shadowMap.getLightMatrix())
+    @gl.uniform1i(@program.uSelfShadow, true)
+
+    # reset
+    @gl.bindFramebuffer(@gl.FRAMEBUFFER, null)
+    @gl.viewport(0, 0, @width, @height) # not needed on Windows Chrome but necessary on Mac Chrome
     return
 
   setUniforms: ->
@@ -293,7 +437,7 @@ class this.MMD
     @gl.uniform3fv(@program.uLightColor, @lightColor)
     return
 
-  renderMaterial: (material, offset) ->
+  renderMaterial: (material) ->
     @gl.uniform3fv(@program.uAmbientColor, material.ambient)
     @gl.uniform3fv(@program.uSpecularColor, material.specular)
     @gl.uniform3fv(@program.uDiffuseColor, material.diffuse)
@@ -323,15 +467,25 @@ class this.MMD
       @gl.uniform1i(@program.uUseSphereMap, false)
 
     @gl.cullFace(@gl.BACK)
-    @gl.drawElements(@gl.TRIANGLES, material.face_vert_count, @gl.UNSIGNED_SHORT, offset)
+
+    sectionLength = material.endIndex - material.startIndex
+    offset = material.startIndex * 2 # *2 because it's byte offset
+    @gl.drawElements(@gl.TRIANGLES, sectionLength, @gl.UNSIGNED_SHORT, offset)
+
     return
 
-  renderEdge: (material, offset) ->
-    if @drawEdge and material.edge_flag
-      @gl.uniform1i(@program.uEdge, true)
-      @gl.cullFace(@gl.FRONT)
-      @gl.drawElements(@gl.TRIANGLES, material.face_vert_count, @gl.UNSIGNED_SHORT, offset)
-    return
+  renderEdge: (material) ->
+    return if not @drawEdge or not material.edge_flag
+
+    @gl.uniform1i(@program.uEdge, true)
+    @gl.cullFace(@gl.FRONT)
+
+    sectionLength = material.endIndex - material.startIndex
+    offset = material.startIndex * 2 # *2 because it's byte offset
+    @gl.drawElements(@gl.TRIANGLES, sectionLength, @gl.UNSIGNED_SHORT, offset)
+
+    @gl.cullFace(@gl.BACK)
+    @gl.uniform1i(@program.uEdge, false)
 
   renderAxes: ->
     axisBuffer = @gl.createBuffer()
@@ -375,8 +529,8 @@ class this.MMD
       @gl.drawArrays(@gl.POINTS, 0, 1)
       @gl.uniform1i(@program.uCenterPoint, false)
 
-      @gl.deleteBuffer(axisBuffer)
-      @gl.bindBuffer(@gl.ARRAY_BUFFER, null)
+    @gl.deleteBuffer(axisBuffer)
+    @gl.bindBuffer(@gl.ARRAY_BUFFER, null)
 
     return
 
@@ -498,15 +652,19 @@ class this.MMD
     # misc
     @drawSelfShadow = true
     @drawAxes = true
-    @drawCenterPoint = true
+    @drawCenterPoint = false
 
     @fps = 30 # redraw every 1000/30 msec
     @playing = false
     @frame = -1
     return
 
-  addMotion: (motion) ->
-    @motionManager.addMotion(motion)
+  addCameraLightMotion: (motion, merge_flag, frame_offset) ->
+    @motionManager.addCameraLightMotion(motion, merge_flag, frame_offset)
+    return
+
+  addModelMotion: (model, motion, merge_flag, frame_offset) ->
+    @motionManager.addModelMotion(model, motion, merge_flag, frame_offset)
     return
 
   play: ->

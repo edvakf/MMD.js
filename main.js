@@ -13,17 +13,29 @@ window.onload = function() {
   mmd.registerKeyListener(document);
   mmd.registerMouseListener(document);
 
-  //var miku = new MMD.Model('model', 'Miku_Hatsune.pmd');
-  var miku = new MMD.Model('Lat', 'Normal.pmd');
+  var miku = new MMD.Model('model', 'Miku_Hatsune.pmd');
+  //var miku = new MMD.Model('Lat', 'Normal.pmd');
   miku.load(function() {
     mmd.addModel(miku);
     mmd.initBuffers();
     mmd.start();
 
-    var eyes = new MMD.Motion('motion/kottiminnna.vmd');
-    eyes.load(function() {
-      mmd.addMotion(eyes);
-      mmd.play()
+    var zoom = new MMD.Motion('motion/zoom_in.vmd');
+    zoom.load(function() {
+      mmd.addCameraLightMotion(zoom);
+
+      var smile = new MMD.Motion('motion/smile.vmd');
+      smile.load(function() {
+        mmd.addModelMotion(miku, smile);
+
+        var arm = new MMD.Motion('motion/arm.vmd');
+        arm.load(function() {
+          mmd.addModelMotion(miku, arm, true);
+          mmd.addModelMotion(miku, arm, true, 60);
+
+          mmd.play()
+        });
+      });
     });
   });
 };

@@ -48,7 +48,7 @@
           line = _ref2[_j];
           type = (_ref3 = line.match(/^\s*(uniform|attribute)\s+/)) != null ? _ref3[1] : void 0;
           if (!type) continue;
-          name = line.match(/(\w+)\s*$/)[1];
+          name = line.match(/(\w+)(\[\d+\])?\s*$/)[1];
           if (type === 'attribute' && __indexOf.call(attributes, name) < 0) {
             attributes.push(name);
           }
@@ -73,13 +73,15 @@
     };
 
     MMD.prototype.initBuffers = function() {
+      this.vbuffers = {};
       this.initVertices();
+      this.initBones();
       this.initIndices();
       this.initTextures();
     };
 
     MMD.prototype.initVertices = function() {
-      var buffer, data, edge, i, length, model, normals, positions, uvs, vertex;
+      var buffer, data, edge, i, length, model, normals, positions, uvs, vertex, _i, _len, _ref;
       model = this.model;
       length = model.vertices.length;
       positions = new Float32Array(3 * length);
@@ -99,41 +101,96 @@
         edge[i] = 1 - vertex.edge_flag;
       }
       model.positions = positions;
-      this.vbuffers = (function() {
-        var _i, _len, _ref, _results;
-        _ref = [
-          {
-            attribute: 'aVertexPosition',
-            array: positions,
-            size: 3
-          }, {
-            attribute: 'aVertexNormal',
-            array: normals,
-            size: 3
-          }, {
-            attribute: 'aTextureCoord',
-            array: uvs,
-            size: 2
-          }, {
-            attribute: 'aVertexEdge',
-            array: edge,
-            size: 1
-          }
-        ];
-        _results = [];
-        for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-          data = _ref[_i];
-          buffer = this.gl.createBuffer();
-          this.gl.bindBuffer(this.gl.ARRAY_BUFFER, buffer);
-          this.gl.bufferData(this.gl.ARRAY_BUFFER, data.array, this.gl.STATIC_DRAW);
-          _results.push({
-            attribute: data.attribute,
-            size: data.size,
-            buffer: buffer
-          });
+      _ref = [
+        {
+          attribute: 'aVertexPosition',
+          array: positions,
+          size: 3
+        }, {
+          attribute: 'aVertexNormal',
+          array: normals,
+          size: 3
+        }, {
+          attribute: 'aTextureCoord',
+          array: uvs,
+          size: 2
+        }, {
+          attribute: 'aVertexEdge',
+          array: edge,
+          size: 1
         }
-        return _results;
-      }).call(this);
+      ];
+      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+        data = _ref[_i];
+        buffer = this.gl.createBuffer();
+        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, buffer);
+        this.gl.bufferData(this.gl.ARRAY_BUFFER, data.array, this.gl.STATIC_DRAW);
+        this.vbuffers[data.attribute] = {
+          size: data.size,
+          buffer: buffer
+        };
+      }
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
+    };
+
+    MMD.prototype.initBones = function() {
+      var bone1, bone2, bones, buffer, data, i, idx, j, length, material, model, offset, triangles, vert, vertIndex, verts, vertsVisited, weights, _i, _j, _len, _len2, _ref, _ref2, _ref3;
+      model = this.model;
+      verts = model.vertices;
+      length = verts.length;
+      vertsVisited = new Uint8Array(length);
+      bone1 = new Float32Array(length);
+      bone2 = new Float32Array(length);
+      weights = new Float32Array(length);
+      triangles = model.triangles;
+      offset = 0;
+      _ref = model.materials;
+      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+        material = _ref[_i];
+        bones = material.bones = [];
+        material.startIndex = offset;
+        for (i = 0, _ref2 = material.face_vert_count; i < _ref2; i += 3) {
+          for (j = 0; j < 3; j++) {
+            vertIndex = triangles[offset + i + j];
+            if (vertsVisited[vertIndex] === 1) continue;
+            vertsVisited[vertIndex] = 1;
+            vert = verts[vertIndex];
+            weights[vertIndex] = vert.bone_weight / 100;
+            idx = bones.indexOf(vert.bone_num1);
+            if (idx < 0) idx = bones.push(vert.bone_num1) - 1;
+            bone1[vertIndex] = idx;
+            idx = bones.indexOf(vert.bone_num2);
+            if (idx < 0) idx = bones.push(vert.bone_num2) - 1;
+            bone2[vertIndex] = idx;
+          }
+        }
+        material.endIndex = (offset += material.face_vert_count);
+      }
+      _ref3 = [
+        {
+          attribute: 'aBone1',
+          array: bone1,
+          size: 1
+        }, {
+          attribute: 'aBone2',
+          array: bone2,
+          size: 1
+        }, {
+          attribute: 'aBoneWeight',
+          array: weights,
+          size: 1
+        }
+      ];
+      for (_j = 0, _len2 = _ref3.length; _j < _len2; _j++) {
+        data = _ref3[_j];
+        buffer = this.gl.createBuffer();
+        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, buffer);
+        this.gl.bufferData(this.gl.ARRAY_BUFFER, data.array, this.gl.STATIC_DRAW);
+        this.vbuffers[data.attribute] = {
+          size: data.size,
+          buffer: buffer
+        };
+      }
       this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
     };
 
@@ -209,11 +266,18 @@
     };
 
     MMD.prototype.move = function() {
-      var b, base, bones, camera, i, light, model, morph, morphs, name, vert, weight, _i, _j, _len, _len2, _ref, _ref2, _ref3;
       if (!this.playing) return;
-      this.frame++;
-      model = this.model;
-      _ref = this.motionManager.getFrame(this.frame), bones = _ref.bones, morphs = _ref.morphs, camera = _ref.camera, light = _ref.light;
+      if (++this.frame > this.motionManager.lastFrame) {
+        this.pause();
+        return;
+      }
+      this.moveCameraLight();
+      return this.moveModel();
+    };
+
+    MMD.prototype.moveCameraLight = function() {
+      var camera, light, _ref;
+      _ref = this.motionManager.getCameraLightFrame(this.frame), camera = _ref.camera, light = _ref.light;
       if (camera) {
         this.distance = camera.distance;
         this.rotx = camera.rotation[0];
@@ -225,13 +289,31 @@
         this.lightDirection = light.location;
         this.lightColor = light.color;
       }
-      base = model.morphsDict['base'];
-      for (name in morphs) {
-        weight = morphs[name];
-        morph = model.morphsDict[name];
-        if (!morph) continue;
+    };
+
+    MMD.prototype.moveModel = function() {
+      var bones, model, morphs, _ref;
+      model = this.model;
+      _ref = this.motionManager.getModelFrame(model, this.frame), morphs = _ref.morphs, bones = _ref.bones;
+      this.moveMorphs(model, morphs);
+      this.moveBones(model, bones);
+    };
+
+    MMD.prototype.moveMorphs = function(model, morphs) {
+      var b, base, i, j, morph, vert, weight, _i, _j, _len, _len2, _len3, _ref, _ref2, _ref3;
+      if (!morphs) return;
+      if (model.morphs.length === 0) return;
+      _ref = model.morphs;
+      for (j = 0, _len = _ref.length; j < _len; j++) {
+        morph = _ref[j];
+        if (j === 0) {
+          base = morph;
+          continue;
+        }
+        if (!(morph.name in morphs)) continue;
+        weight = morphs[morph.name];
         _ref2 = morph.vert_data;
-        for (_i = 0, _len = _ref2.length; _i < _len; _i++) {
+        for (_i = 0, _len2 = _ref2.length; _i < _len2; _i++) {
           vert = _ref2[_i];
           b = base.vert_data[vert.index];
           i = b.index;
@@ -240,18 +322,68 @@
           model.positions[3 * i + 2] += vert.z * weight;
         }
       }
-      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.vbuffers[0].buffer);
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.vbuffers.aVertexPosition.buffer);
       this.gl.bufferData(this.gl.ARRAY_BUFFER, model.positions, this.gl.STATIC_DRAW);
       this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
       _ref3 = base.vert_data;
-      for (_j = 0, _len2 = _ref3.length; _j < _len2; _j++) {
+      for (_j = 0, _len3 = _ref3.length; _j < _len3; _j++) {
         b = _ref3[_j];
         i = b.index;
         model.positions[3 * i] = b.x;
         model.positions[3 * i + 1] = b.y;
         model.positions[3 * i + 2] = b.z;
       }
-      if (this.frame > this.motionManager.lastFrame) this.pause();
+    };
+
+    MMD.prototype.moveBones = function(model, bones) {
+      var bone, boneMotions, motion, p, parent, parentMotion, r, t, _i, _len, _ref;
+      if (!bones) return;
+      boneMotions = {};
+      _ref = model.bones;
+      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+        bone = _ref[_i];
+        motion = bones[bone.name];
+        if (motion) {
+          r = motion.rotation;
+          t = motion.location;
+        } else {
+          r = quat4.create([0, 0, 0, 1]);
+          t = vec3.create([0, 0, 0]);
+        }
+        parent = bone.parent_bone_index;
+        if (parent === 0xFFFF) {
+          boneMotions[bone.name] = {
+            p: vec3.add(bone.head_pos, t, vec3.create()),
+            r: r
+          };
+        } else {
+          parent = model.bones[parent];
+          parentMotion = boneMotions[parent.name];
+          /*
+                     the position of bone is found as follows
+                     take the ORIGINAL bone_head vector relative to it's parent's ORIGINAL bone_head,
+                     add translation to it and rotate by the parent's rotation,
+                     then add the parent's position
+                     i.e. calculate
+                       p_1' = r_2' (p_1 - p_2 + t_1) r_2'^* + p_2'
+                     where p_1 and p_2 are it's and the parent's ORIGINAL positions respectively,
+                     t_1 is it's own translation, and r_2' is the parent's rotation
+                     the children of this bone will be affected by the moved position and
+                     combined rotational vector
+                       r_1' = r_2' + r_1
+          */
+          r = quat4.createMultiply(parentMotion.r, r);
+          p = vec3.createSubtract(bone.head_pos, parent.head_pos);
+          vec3.add(p, t);
+          vec3.rotateByQuat4(p, parentMotion.r);
+          vec3.add(p, parentMotion.p);
+          boneMotions[bone.name] = {
+            p: p,
+            r: r
+          };
+        }
+      }
+      model.boneMotions = boneMotions;
     };
 
     MMD.prototype.computeMatrices = function() {
@@ -270,18 +402,36 @@
       this.nMatrix = mat4.inverseTranspose(this.mvMatrix, mat4.create());
     };
 
+    MMD.prototype.reindexBones = function(model, bones) {
+      var bone, boneIndex, bonePosMoved, bonePosOriginal, boneRotations, motion, _i, _len;
+      bonePosOriginal = [];
+      bonePosMoved = [];
+      boneRotations = [];
+      for (_i = 0, _len = bones.length; _i < _len; _i++) {
+        boneIndex = bones[_i];
+        bone = model.bones[boneIndex];
+        bonePosOriginal.push(bone.head_pos[0], bone.head_pos[1], bone.head_pos[2]);
+        motion = model.boneMotions[bone.name];
+        boneRotations.push(motion.r[0], motion.r[1], motion.r[2], motion.r[3]);
+        bonePosMoved.push(motion.p[0], motion.p[1], motion.p[2]);
+      }
+      this.gl.uniform3fv(this.program.uBonePosOriginal, bonePosOriginal);
+      this.gl.uniform3fv(this.program.uBonePosMoved, bonePosMoved);
+      this.gl.uniform4fv(this.program.uBoneRotations, boneRotations);
+    };
+
     MMD.prototype.render = function() {
-      var i, material, offset, vb, _i, _len, _len2, _ref, _ref2;
+      var attribute, material, vb, _i, _len, _ref, _ref2;
       if (!this.redraw && !this.playing) return;
       this.redraw = false;
       this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
       this.gl.viewport(0, 0, this.width, this.height);
       this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
       _ref = this.vbuffers;
-      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-        vb = _ref[_i];
+      for (attribute in _ref) {
+        vb = _ref[attribute];
         this.gl.bindBuffer(this.gl.ARRAY_BUFFER, vb.buffer);
-        this.gl.vertexAttribPointer(this.program[vb.attribute], vb.size, this.gl.FLOAT, false, 0, 0);
+        this.gl.vertexAttribPointer(this.program[attribute], vb.size, this.gl.FLOAT, false, 0, 0);
       }
       this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, this.ibuffer);
       this.setSelfShadowTexture();
@@ -289,13 +439,16 @@
       this.gl.enable(this.gl.CULL_FACE);
       this.gl.enable(this.gl.BLEND);
       this.gl.blendFuncSeparate(this.gl.SRC_ALPHA, this.gl.ONE_MINUS_SRC_ALPHA, this.gl.SRC_ALPHA, this.gl.DST_ALPHA);
-      offset = 0;
       _ref2 = this.model.materials;
-      for (i = 0, _len2 = _ref2.length; i < _len2; i++) {
-        material = _ref2[i];
-        this.renderMaterial(material, offset);
-        this.renderEdge(material, offset);
-        offset += material.face_vert_count * 2;
+      for (_i = 0, _len = _ref2.length; _i < _len; _i++) {
+        material = _ref2[_i];
+        if (this.model.boneMotions) {
+          this.reindexBones(this.model, material.bones);
+          this.gl.uniform1i(this.program.uBoneMotion, true);
+        }
+        this.renderMaterial(material);
+        this.renderEdge(material);
+        this.gl.uniform1i(this.program.uBoneMotion, false);
       }
       this.gl.disable(this.gl.CULL_FACE);
       this.gl.disable(this.gl.BLEND);
@@ -304,16 +457,33 @@
     };
 
     MMD.prototype.setSelfShadowTexture = function() {
-      if (this.drawSelfShadow) {
-        this.shadowMap.generate();
-        this.gl.activeTexture(this.gl.TEXTURE3);
-        this.gl.bindTexture(this.gl.TEXTURE_2D, this.shadowMap.getTexture());
-        this.gl.uniform1i(this.program.uShadowMap, 3);
-        this.gl.uniformMatrix4fv(this.program.uLightMatrix, false, this.shadowMap.getLightMatrix());
-        this.gl.uniform1i(this.program.uSelfShadow, true);
-        this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
-        this.gl.viewport(0, 0, this.width, this.height);
+      var material, model, offset, sectionLength, _i, _len, _ref;
+      if (!this.drawSelfShadow) return;
+      model = this.model;
+      this.shadowMap.computeMatrices();
+      this.shadowMap.beforeRender();
+      if (this.model.boneMotions) {
+        this.gl.uniform1i(this.program.uBoneMotion, true);
+        _ref = model.materials;
+        for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+          material = _ref[_i];
+          this.reindexBones(model, material.bones);
+          sectionLength = material.endIndex - material.startIndex;
+          offset = material.startIndex * 2;
+          this.gl.drawElements(this.gl.TRIANGLES, sectionLength, this.gl.UNSIGNED_SHORT, offset);
+        }
+        this.gl.uniform1i(this.program.uBoneMotion, false);
+      } else {
+        this.gl.drawElements(this.gl.TRIANGLES, model.triangles.length, this.gl.UNSIGNED_SHORT, 0);
       }
+      this.shadowMap.afterRender();
+      this.gl.activeTexture(this.gl.TEXTURE3);
+      this.gl.bindTexture(this.gl.TEXTURE_2D, this.shadowMap.getTexture());
+      this.gl.uniform1i(this.program.uShadowMap, 3);
+      this.gl.uniformMatrix4fv(this.program.uLightMatrix, false, this.shadowMap.getLightMatrix());
+      this.gl.uniform1i(this.program.uSelfShadow, true);
+      this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+      this.gl.viewport(0, 0, this.width, this.height);
     };
 
     MMD.prototype.setUniforms = function() {
@@ -329,8 +499,8 @@
       this.gl.uniform3fv(this.program.uLightColor, this.lightColor);
     };
 
-    MMD.prototype.renderMaterial = function(material, offset) {
-      var textures;
+    MMD.prototype.renderMaterial = function(material) {
+      var offset, sectionLength, textures;
       this.gl.uniform3fv(this.program.uAmbientColor, material.ambient);
       this.gl.uniform3fv(this.program.uSpecularColor, material.specular);
       this.gl.uniform3fv(this.program.uDiffuseColor, material.diffuse);
@@ -357,15 +527,21 @@
         this.gl.uniform1i(this.program.uUseSphereMap, false);
       }
       this.gl.cullFace(this.gl.BACK);
-      this.gl.drawElements(this.gl.TRIANGLES, material.face_vert_count, this.gl.UNSIGNED_SHORT, offset);
+      sectionLength = material.endIndex - material.startIndex;
+      offset = material.startIndex * 2;
+      this.gl.drawElements(this.gl.TRIANGLES, sectionLength, this.gl.UNSIGNED_SHORT, offset);
     };
 
-    MMD.prototype.renderEdge = function(material, offset) {
-      if (this.drawEdge && material.edge_flag) {
-        this.gl.uniform1i(this.program.uEdge, true);
-        this.gl.cullFace(this.gl.FRONT);
-        this.gl.drawElements(this.gl.TRIANGLES, material.face_vert_count, this.gl.UNSIGNED_SHORT, offset);
-      }
+    MMD.prototype.renderEdge = function(material) {
+      var offset, sectionLength;
+      if (!this.drawEdge || !material.edge_flag) return;
+      this.gl.uniform1i(this.program.uEdge, true);
+      this.gl.cullFace(this.gl.FRONT);
+      sectionLength = material.endIndex - material.startIndex;
+      offset = material.startIndex * 2;
+      this.gl.drawElements(this.gl.TRIANGLES, sectionLength, this.gl.UNSIGNED_SHORT, offset);
+      this.gl.cullFace(this.gl.BACK);
+      return this.gl.uniform1i(this.program.uEdge, false);
     };
 
     MMD.prototype.renderAxes = function() {
@@ -399,9 +575,9 @@
         this.gl.bufferData(this.gl.ARRAY_BUFFER, new Float32Array(this.center), this.gl.STATIC_DRAW);
         this.gl.drawArrays(this.gl.POINTS, 0, 1);
         this.gl.uniform1i(this.program.uCenterPoint, false);
-        this.gl.deleteBuffer(axisBuffer);
-        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
       }
+      this.gl.deleteBuffer(axisBuffer);
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
     };
 
     MMD.prototype.registerKeyListener = function(element) {
@@ -544,14 +720,18 @@
       this.lightColor = [0.6, 0.6, 0.6];
       this.drawSelfShadow = true;
       this.drawAxes = true;
-      this.drawCenterPoint = true;
+      this.drawCenterPoint = false;
       this.fps = 30;
       this.playing = false;
       this.frame = -1;
     };
 
-    MMD.prototype.addMotion = function(motion) {
-      this.motionManager.addMotion(motion);
+    MMD.prototype.addCameraLightMotion = function(motion, merge_flag, frame_offset) {
+      this.motionManager.addCameraLightMotion(motion, merge_flag, frame_offset);
+    };
+
+    MMD.prototype.addModelMotion = function(model, motion, merge_flag, frame_offset) {
+      this.motionManager.addModelMotion(model, motion, merge_flag, frame_offset);
     };
 
     MMD.prototype.play = function() {
