@@ -404,19 +404,17 @@ class this.MMD
     @shadowMap.computeMatrices()
     @shadowMap.beforeRender()
 
-    if @model.boneMotions
-      @gl.uniform1i(@program.uBoneMotion, true)
-
-      for material in model.materials
+    for material in model.materials
+      continue if 0.979 < material.alpha < 0.981 # alpha is 0.98
+      if @model.boneMotions
         @reindexBones(model, material.bones)
+        @gl.uniform1i(@program.uBoneMotion, true)
 
-        sectionLength = material.endIndex - material.startIndex
-        offset = material.startIndex * 2 # *2 because it's byte offset
-        @gl.drawElements(@gl.TRIANGLES, sectionLength, @gl.UNSIGNED_SHORT, offset)
+      sectionLength = material.endIndex - material.startIndex
+      offset = material.startIndex * 2 # *2 because it's byte offset
+      @gl.drawElements(@gl.TRIANGLES, sectionLength, @gl.UNSIGNED_SHORT, offset)
 
       @gl.uniform1i(@program.uBoneMotion, false)
-    else
-      @gl.drawElements(@gl.TRIANGLES, model.triangles.length, @gl.UNSIGNED_SHORT, 0)
 
     @shadowMap.afterRender()
 

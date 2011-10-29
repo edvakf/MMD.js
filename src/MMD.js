@@ -466,24 +466,23 @@
     };
 
     MMD.prototype.setSelfShadowTexture = function() {
-      var material, model, offset, sectionLength, _i, _len, _ref;
+      var material, model, offset, sectionLength, _i, _len, _ref, _ref2;
       if (!this.drawSelfShadow) return;
       model = this.model;
       this.shadowMap.computeMatrices();
       this.shadowMap.beforeRender();
-      if (this.model.boneMotions) {
-        this.gl.uniform1i(this.program.uBoneMotion, true);
-        _ref = model.materials;
-        for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-          material = _ref[_i];
+      _ref = model.materials;
+      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+        material = _ref[_i];
+        if ((0.979 < (_ref2 = material.alpha) && _ref2 < 0.981)) continue;
+        if (this.model.boneMotions) {
           this.reindexBones(model, material.bones);
-          sectionLength = material.endIndex - material.startIndex;
-          offset = material.startIndex * 2;
-          this.gl.drawElements(this.gl.TRIANGLES, sectionLength, this.gl.UNSIGNED_SHORT, offset);
+          this.gl.uniform1i(this.program.uBoneMotion, true);
         }
+        sectionLength = material.endIndex - material.startIndex;
+        offset = material.startIndex * 2;
+        this.gl.drawElements(this.gl.TRIANGLES, sectionLength, this.gl.UNSIGNED_SHORT, offset);
         this.gl.uniform1i(this.program.uBoneMotion, false);
-      } else {
-        this.gl.drawElements(this.gl.TRIANGLES, model.triangles.length, this.gl.UNSIGNED_SHORT, 0);
       }
       this.shadowMap.afterRender();
       this.gl.activeTexture(this.gl.TEXTURE3);
