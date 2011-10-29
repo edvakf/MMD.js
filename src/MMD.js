@@ -234,6 +234,10 @@
               case '.spa':
                 type = 'spa';
                 break;
+              case '.tga':
+                type = 'regular';
+                fileName += '.png';
+                break;
               default:
                 type = 'regular';
             }

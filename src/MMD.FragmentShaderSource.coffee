@@ -115,7 +115,7 @@ MMD.FragmentShaderSource = '''
         vec4 rgbaDepth = texture2D(uShadowMap, lightCoord.xy);
         float depth = unpack_depth(rgbaDepth);
         if (depth < lightCoord.z - 0.01) {
-          toonCoord = vec2(0.0, 1.0);
+          toonCoord = vec2(0.0, 0.55);
         }
       }
 

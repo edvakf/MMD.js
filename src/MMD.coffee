@@ -174,6 +174,7 @@ class this.MMD
           switch fileName.slice(-4)
             when '.sph' then type = 'sph'
             when '.spa' then type = 'spa'
+            when '.tga' then type = 'regular'; fileName += '.png'
             else             type = 'regular'
           material.textures[type] = @textureManager.get(type, model.directory + '/' + fileName)
 
