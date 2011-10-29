@@ -421,7 +421,7 @@
     };
 
     MMD.prototype.render = function() {
-      var attribute, material, vb, _i, _len, _ref, _ref2;
+      var attribute, material, vb, _i, _j, _len, _len2, _ref, _ref2, _ref3;
       if (!this.redraw && !this.playing) return;
       this.redraw = false;
       this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
@@ -447,11 +447,20 @@
           this.gl.uniform1i(this.program.uBoneMotion, true);
         }
         this.renderMaterial(material);
+        this.gl.uniform1i(this.program.uBoneMotion, false);
+      }
+      this.gl.disable(this.gl.BLEND);
+      _ref3 = this.model.materials;
+      for (_j = 0, _len2 = _ref3.length; _j < _len2; _j++) {
+        material = _ref3[_j];
+        if (this.model.boneMotions) {
+          this.reindexBones(this.model, material.bones);
+          this.gl.uniform1i(this.program.uBoneMotion, true);
+        }
         this.renderEdge(material);
         this.gl.uniform1i(this.program.uBoneMotion, false);
       }
       this.gl.disable(this.gl.CULL_FACE);
-      this.gl.disable(this.gl.BLEND);
       this.renderAxes();
       this.gl.flush();
     };

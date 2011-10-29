@@ -375,12 +375,21 @@ class this.MMD
         @gl.uniform1i(@program.uBoneMotion, true)
 
       @renderMaterial(material)
+
+      @gl.uniform1i(@program.uBoneMotion, false)
+
+    @gl.disable(@gl.BLEND)
+
+    for material in @model.materials
+      if @model.boneMotions
+        @reindexBones(@model, material.bones)
+        @gl.uniform1i(@program.uBoneMotion, true)
+
       @renderEdge(material)
 
       @gl.uniform1i(@program.uBoneMotion, false)
 
     @gl.disable(@gl.CULL_FACE)
-    @gl.disable(@gl.BLEND)
 
     @renderAxes()
 
