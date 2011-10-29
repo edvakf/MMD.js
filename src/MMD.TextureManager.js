@@ -48,6 +48,7 @@
       canv = document.createElement('canvas');
       canv.height = canv.width = size;
       canv.getContext('2d').drawImage(img, 0, 0, w, h, 0, 0, size, size);
+      img = canv;
     }
     return img;
   };
