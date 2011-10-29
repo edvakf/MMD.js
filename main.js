@@ -13,10 +13,10 @@ window.onload = function() {
   mmd.registerKeyListener(document);
   mmd.registerMouseListener(document);
 
-  //var miku = new MMD.Model('model', 'Miku_Hatsune.pmd');
+  var miku = new MMD.Model('model', 'Miku_Hatsune.pmd');
   //var miku = new MMD.Model('Lat', 'Normal.pmd');
   //var miku = new MMD.Model('yufu', 'yufu.pmd');
-  var miku = new MMD.Model('defoko', 'defoko.pmd');
+  //var miku = new MMD.Model('defoko', 'defoko.pmd');
   miku.load(function() {
     mmd.addModel(miku);
     mmd.initBuffers();

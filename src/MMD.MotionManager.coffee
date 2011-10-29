@@ -210,9 +210,15 @@ class ModelMotion
           return cache[id] = frac if X1 == Y1 and X2 == Y2
           return cache[id] = bezierp(X1 / 127, X2 / 127, Y1 / 127, Y2 / 127, frac)
 
+        if quat4.dot(prev.rotation, next.rotation) >= 0
+          rotation = quat4.createSlerp(prev.rotation, next.rotation, bez(3))
+        else
+          r = prev.rotation
+          rotation = quat4.createSlerp([-r[0], -r[1], -r[2], -r[3]], next.rotation, bez(3))
+
         bones[name] = {
           location: vec3.createLerp3(prev.location, next.location, [bez(0), bez(1), bez(2)])
-          rotation: quat4.createSlerp(prev.rotation, next.rotation, bez(3))
+          rotation: rotation
         }
 
     return bones

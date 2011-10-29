@@ -77,3 +77,6 @@ quat4.createSlerp = function(quat, quat2, slerp) {
 quat4.createInverse = function(quat) {
   return quat4.inverse(quat, quat4.create())
 };
+quat4.dot = function(quat, quat2) {
+  return quat[0] * quat2[0] + quat[1] * quat2[1] + quat[2] * quat2[2] + quat[3] * quat2[3];
+};
