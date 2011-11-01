@@ -320,23 +320,22 @@ class IK
   constructor: (buffer, view, offset) ->
     @bone_index = view.getUint16(offset, true); offset += size_Uint16
     @target_bone_index = view.getUint16(offset, true); offset += size_Uint16
-    @chain_length = view.getUint8(offset); offset += size_Uint8
+    chain_length = view.getUint8(offset); offset += size_Uint8
     @iterations = view.getUint16(offset, true); offset += size_Uint16
     @control_weight = view.getFloat32(offset, true); offset += size_Float32
-    @child_bone_indices = (view.getUint16(offset + size_Uint16 * i, true) for i in [0...@chain_length])
-
+    @child_bones = (view.getUint16(offset + size_Uint16 * i, true) for i in [0...chain_length])
   getSize: ->
-    size_Uint16 * 3 + size_Uint8 + size_Float32 + size_Uint16 * @chain_length
+    size_Uint16 * 3 + size_Uint8 + size_Float32 + size_Uint16 * @child_bones.length
 
 #http://blog.goo.ne.jp/torisu_tetosuki/e/8553151c445d261e122a3a31b0f91110
 class Morph
   constructor: (buffer, view, offset) ->
     @name = sjisArrayToString(new Uint8Array(buffer, offset, 20))
     offset += size_Uint8 * 20
-    @vert_count = view.getUint32(offset, true); offset += size_Uint32
+    vert_count = view.getUint32(offset, true); offset += size_Uint32
     @type = view.getUint8(offset); offset += size_Uint8
     @vert_data =
-      for i in [0...@vert_count]
+      for i in [0...vert_count]
         data = {}
         data.index = view.getUint32(offset, true); offset += size_Uint32
         data.x = view.getFloat32(offset, true); offset += size_Float32
@@ -345,7 +344,7 @@ class Morph
         data
 
   getSize: ->
-    size_Uint8 * 21 + size_Uint32 + (size_Uint32 + size_Float32 * 3) * @vert_count
+    size_Uint8 * 21 + size_Uint32 + (size_Uint32 + size_Float32 * 3) * @vert_data.length
 
 #http://blog.goo.ne.jp/torisu_tetosuki/e/1e25fc196f2d7a7798f5cea87a942943
 #char rigidbody_name[20]; // 諸データ：名称 // 頭

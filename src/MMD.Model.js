@@ -467,29 +467,29 @@
   IK = (function() {
 
     function IK(buffer, view, offset) {
-      var i;
+      var chain_length, i;
       this.bone_index = view.getUint16(offset, true);
       offset += size_Uint16;
       this.target_bone_index = view.getUint16(offset, true);
       offset += size_Uint16;
-      this.chain_length = view.getUint8(offset);
+      chain_length = view.getUint8(offset);
       offset += size_Uint8;
       this.iterations = view.getUint16(offset, true);
       offset += size_Uint16;
       this.control_weight = view.getFloat32(offset, true);
       offset += size_Float32;
-      this.child_bone_indices = (function() {
-        var _ref, _results;
+      this.child_bones = (function() {
+        var _results;
         _results = [];
-        for (i = 0, _ref = this.chain_length; 0 <= _ref ? i < _ref : i > _ref; 0 <= _ref ? i++ : i--) {
+        for (i = 0; 0 <= chain_length ? i < chain_length : i > chain_length; 0 <= chain_length ? i++ : i--) {
           _results.push(view.getUint16(offset + size_Uint16 * i, true));
         }
         return _results;
-      }).call(this);
+      })();
     }
 
     IK.prototype.getSize = function() {
-      return size_Uint16 * 3 + size_Uint8 + size_Float32 + size_Uint16 * this.chain_length;
+      return size_Uint16 * 3 + size_Uint8 + size_Float32 + size_Uint16 * this.child_bones.length;
     };
 
     return IK;
@@ -499,17 +499,17 @@
   Morph = (function() {
 
     function Morph(buffer, view, offset) {
-      var data, i;
+      var data, i, vert_count;
       this.name = sjisArrayToString(new Uint8Array(buffer, offset, 20));
       offset += size_Uint8 * 20;
-      this.vert_count = view.getUint32(offset, true);
+      vert_count = view.getUint32(offset, true);
       offset += size_Uint32;
       this.type = view.getUint8(offset);
       offset += size_Uint8;
       this.vert_data = (function() {
-        var _ref, _results;
+        var _results;
         _results = [];
-        for (i = 0, _ref = this.vert_count; 0 <= _ref ? i < _ref : i > _ref; 0 <= _ref ? i++ : i--) {
+        for (i = 0; 0 <= vert_count ? i < vert_count : i > vert_count; 0 <= vert_count ? i++ : i--) {
           data = {};
           data.index = view.getUint32(offset, true);
           offset += size_Uint32;
@@ -522,11 +522,11 @@
           _results.push(data);
         }
         return _results;
-      }).call(this);
+      })();
     }
 
     Morph.prototype.getSize = function() {
-      return size_Uint8 * 21 + size_Uint32 + (size_Uint32 + size_Float32 * 3) * this.vert_count;
+      return size_Uint8 * 21 + size_Uint32 + (size_Uint32 + size_Float32 * 3) * this.vert_data.length;
     };
 
     return Morph;
