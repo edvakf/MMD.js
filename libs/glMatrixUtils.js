@@ -24,6 +24,9 @@ mat4.applyTranslate = function(mat, vec) {
 };
 
 vec3.moveBy = vec3.add;
+vec3.createAdd = function(a, b) {
+  return vec3.add(a, b, vec3.create());
+};
 vec3.rotateX = function(vec, angle, dest) {
   var rotation = mat4.rotateX(mat4.identity(mat4.create()), angle);
   return mat4.multiplyVec3(rotation, vec, dest);

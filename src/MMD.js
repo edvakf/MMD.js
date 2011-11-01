@@ -339,53 +339,127 @@
       }
     };
 
-    MMD.prototype.moveBones = function(model, bones) {
-      var bone, boneMotions, motion, p, parent, parentMotion, r, t, _i, _len, _ref;
-      if (!bones) return;
-      boneMotions = {};
+    MMD.prototype.moveBones = function(model, individualBoneMotions) {
+      var affectedBones, axis, axisLen, bone, boneMotions, bonePos, c, getBoneMotion, i, ik, ikbone, ikbonePos, ikboneVec, ikboneVecLen, j, maxangle, minLength, motion, n, parent, q, r, sinTheta, target, targetParent, targetPos, targetVec, targetVecLen, theta, _i, _j, _k, _len, _len2, _len3, _len4, _name, _ref, _ref2, _ref3, _ref4, _ref5;
+      if (!individualBoneMotions) return;
       _ref = model.bones;
       for (_i = 0, _len = _ref.length; _i < _len; _i++) {
         bone = _ref[_i];
-        motion = bones[bone.name];
-        if (motion) {
-          r = motion.rotation;
-          t = motion.location;
-        } else {
-          r = quat4.create([0, 0, 0, 1]);
-          t = vec3.create([0, 0, 0]);
+        if ((_ref2 = individualBoneMotions[_name = bone.name]) == null) {
+          individualBoneMotions[_name] = {
+            rotation: quat4.create([0, 0, 0, 1]),
+            location: vec3.create([0, 0, 0])
+          };
         }
-        parent = bone.parent_bone_index;
-        if (parent === 0xFFFF) {
-          boneMotions[bone.name] = {
-            p: vec3.add(bone.head_pos, t, vec3.create()),
+      }
+      boneMotions = {};
+      getBoneMotion = function(bone) {
+        /*
+                 the position of a bone is found as follows
+                 take the ORIGINAL bone_head vector relative to it's parent's ORIGINAL bone_head,
+                 add translation to it and rotate by parent's rotation,
+                 then add parent's position, i.e.
+                   p_1' = r_2' (p_1 - p_2 + t_1) r_2'^* + p_2'
+                 where p_1 and p_2 are it's and parent's ORIGINAL positions respectively,
+                 t_1 is it's own translation, and r_2' is the parent's rotation
+                 the children of this bone will be affected by the moved position and total rotation
+                   r_1' = r_2' + r_1
+        */
+        var p, parent, parentMotion, r, t, that;
+        if (that = boneMotions[bone.name]) return that;
+        that = individualBoneMotions[bone.name];
+        r = that.rotation;
+        t = that.location;
+        if (bone.parent_bone_index === 0xFFFF) {
+          return boneMotions[bone.name] = {
+            p: vec3.createAdd(bone.head_pos, t),
             r: r
           };
         } else {
-          parent = model.bones[parent];
-          parentMotion = boneMotions[parent.name];
-          /*
-                     the position of bone is found as follows
-                     take the ORIGINAL bone_head vector relative to it's parent's ORIGINAL bone_head,
-                     add translation to it and rotate by the parent's rotation,
-                     then add the parent's position
-                     i.e. calculate
-                       p_1' = r_2' (p_1 - p_2 + t_1) r_2'^* + p_2'
-                     where p_1 and p_2 are it's and the parent's ORIGINAL positions respectively,
-                     t_1 is it's own translation, and r_2' is the parent's rotation
-                     the children of this bone will be affected by the moved position and
-                     combined rotational vector
-                       r_1' = r_2' + r_1
-          */
+          parent = model.bones[bone.parent_bone_index];
+          parentMotion = getBoneMotion(parent);
           r = quat4.createMultiply(parentMotion.r, r);
           p = vec3.createSubtract(bone.head_pos, parent.head_pos);
-          vec3.add(p, t);
+          if ((that = bone.type) === 1 || that === 2) vec3.add(p, t);
           vec3.rotateByQuat4(p, parentMotion.r);
           vec3.add(p, parentMotion.p);
-          boneMotions[bone.name] = {
+          return boneMotions[bone.name] = {
             p: p,
             r: r
           };
         }
+      };
+      targetVec = vec3.create();
+      ikboneVec = vec3.create();
+      axis = vec3.create();
+      _ref3 = model.iks;
+      for (_j = 0, _len2 = _ref3.length; _j < _len2; _j++) {
+        ik = _ref3[_j];
+        maxangle = ik.control_weight * 4;
+        affectedBones = (function() {
+          var _k, _len3, _ref4, _results;
+          _ref4 = ik.child_bones;
+          _results = [];
+          for (_k = 0, _len3 = _ref4.length; _k < _len3; _k++) {
+            i = _ref4[_k];
+            _results.push(model.bones[i]);
+          }
+          return _results;
+        })();
+        ikbone = model.bones[ik.bone_index];
+        ikbonePos = getBoneMotion(ikbone).p;
+        target = model.bones[ik.target_bone_index];
+        targetParent = model.bones[target.parent_bone_index];
+        minLength = 0.1 * vec3.length(vec3.subtract(target.head_pos, targetParent.head_pos, axis));
+        for (n = 0, _ref4 = ik.iterations; 0 <= _ref4 ? n < _ref4 : n > _ref4; 0 <= _ref4 ? n++ : n--) {
+          targetPos = getBoneMotion(target).p;
+          if (minLength > vec3.length(vec3.subtract(targetPos, ikbonePos, axis))) {
+            break;
+          }
+          for (i = 0, _len3 = affectedBones.length; i < _len3; i++) {
+            bone = affectedBones[i];
+            motion = getBoneMotion(bone);
+            bonePos = motion.p;
+            if (i > 0) targetPos = getBoneMotion(target).p;
+            targetVec = vec3.subtract(targetPos, bonePos, targetVec);
+            targetVecLen = vec3.length(targetVec);
+            if (targetVecLen < minLength) continue;
+            ikboneVec = vec3.subtract(ikbonePos, bonePos, ikboneVec);
+            ikboneVecLen = vec3.length(ikboneVec);
+            if (ikboneVecLen < minLength) continue;
+            axis = vec3.cross(targetVec, ikboneVec, axis);
+            axisLen = vec3.length(axis);
+            sinTheta = axisLen / ikboneVecLen / targetVecLen;
+            if (sinTheta < 0.001) continue;
+            theta = Math.asin(sinTheta);
+            if (vec3.dot(targetVec, ikboneVec) < 0) {
+              theta = 3.141592653589793 - theta;
+            }
+            if (theta > maxangle) theta = maxangle;
+            q = quat4.create(vec3.scale(axis, Math.sin(theta / 2) / axisLen));
+            q[3] = Math.cos(theta / 2);
+            parent = model.bones[bone.parent_bone_index];
+            r = quat4.multiply(quat4.multiply(quat4.createInverse(getBoneMotion(parent).r), q), motion.r);
+            if (bone.name.indexOf('\u3072\u3056') >= 0) {
+              c = r[3];
+              r = quat4.set([Math.sqrt(1 - c * c), 0, 0, c], r);
+              quat4.inverse(boneMotions[bone.name].r, q);
+              quat4.multiply(r, q, q);
+              q = quat4.multiply(boneMotions[parent.name].r, q, q);
+            }
+            individualBoneMotions[bone.name].rotation = quat4.normalize(r);
+            boneMotions[bone.name].r = quat4.multiply(q, motion.r);
+            for (j = 0; 0 <= i ? j < i : j > i; 0 <= i ? j++ : j--) {
+              delete boneMotions[affectedBones[j].name];
+            }
+            delete boneMotions[target.name];
+          }
+        }
+      }
+      _ref5 = model.bones;
+      for (_k = 0, _len4 = _ref5.length; _k < _len4; _k++) {
+        bone = _ref5[_k];
+        getBoneMotion(bone);
       }
       model.boneMotions = boneMotions;
     };
