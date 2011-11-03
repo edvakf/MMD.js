@@ -6,6 +6,7 @@
     function TextureManager(mmd) {
       this.mmd = mmd;
       this.store = {};
+      this.pendingCount = 0;
     }
 
     TextureManager.prototype.get = function(type, url) {
@@ -30,8 +31,10 @@
         }
         gl.generateMipmap(gl.TEXTURE_2D);
         gl.bindTexture(gl.TEXTURE_2D, null);
-        if (_this.onload) return _this.onload(img);
+        if (_this.onload) _this.onload(img);
+        return --_this.pendingCount;
       });
+      this.pendingCount++;
       return texture;
     };
 

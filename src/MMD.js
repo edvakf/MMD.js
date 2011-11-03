@@ -270,7 +270,7 @@
     };
 
     MMD.prototype.move = function() {
-      if (!this.playing) return;
+      if (!this.playing || this.textureManager.pendingCount > 0) return;
       if (++this.frame > this.motionManager.lastFrame) {
         this.pause();
         return;

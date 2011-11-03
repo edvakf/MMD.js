@@ -2,6 +2,7 @@ class MMD.TextureManager
   constructor: (mmd) ->
     @mmd = mmd
     @store = {}
+    @pendingCount = 0
 
   get: (type, url) ->
     texture = @store[url]
@@ -29,7 +30,9 @@ class MMD.TextureManager
       gl.bindTexture(gl.TEXTURE_2D, null)
 
       @onload(img) if @onload
+      --@pendingCount
     )
+    @pendingCount++
 
     return texture
 
