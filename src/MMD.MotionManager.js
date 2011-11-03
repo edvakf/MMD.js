@@ -48,13 +48,6 @@
       this.addLightMotoin(motion.light, merge_flag, frame_offset);
     };
 
-    MotionManager.prototype.getCameraLightFrame = function(frame) {
-      return {
-        camera: this.getCameraFrame(frame),
-        light: this.getLightFrame(frame)
-      };
-    };
-
     MotionManager.prototype.addCameraMotoin = function(camera, merge_flag, frame_offset) {
       var c, frame, _i, _len;
       if (camera.length === 0) return;

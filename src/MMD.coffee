@@ -211,19 +211,24 @@ class this.MMD
       @pause()
       return
 
-    @moveCameraLight()
+    @moveCamera()
+    @moveLight()
     @moveModel()
+    return
 
-  moveCameraLight: ->
-    {camera, light} = @motionManager.getCameraLightFrame(@frame)
-
-    if camera
+  moveCamera: ->
+    camera = @motionManager.getCameraFrame(@frame)
+    if camera and not @ignoreCameraMotion
       @distance = camera.distance
       @rotx = camera.rotation[0]
       @roty = camera.rotation[1]
       @center = vec3.create(camera.location)
       @fovy = camera.view_angle
 
+    return
+
+  moveLight: ->
+    light = @motionManager.getLightFrame(@frame)
     if light
       @lightDirection = light.location
       @lightColor = light.color
@@ -609,7 +614,6 @@ class this.MMD
 
   registerKeyListener: (element) ->
     element.addEventListener('keydown', (e) =>
-      return if @playing
       switch e.keyCode + e.shiftKey * 1000 + e.ctrlKey * 10000 + e.altKey * 100000
         when 37 then @roty += Math.PI / 12 # left
         when 39 then @roty -= Math.PI / 12 # right
@@ -651,7 +655,6 @@ class this.MMD
 
   registerDragListener: (element) ->
     element.addEventListener('mousedown', (e) =>
-      return if @playing
       return if e.button != 0
       modifier = e.shiftKey * 1000 + e.ctrlKey * 10000 + e.altKey * 100000
       return if modifier != 0 and modifier != 1000
@@ -692,7 +695,6 @@ class this.MMD
 
   registerWheelListener: (element) ->
     onwheel = (e) =>
-      return if @playing
       delta = e.detail || e.wheelDelta / (-40) # positive: wheel down
       @distance += delta * @distance / @DIST
       @redraw = true
@@ -707,6 +709,7 @@ class this.MMD
 
   initParameters: ->
     # camera/view settings
+    @ignoreCameraMotion = false
     @rotx = @roty = 0
     @distance = @DIST = 35
     @center = [0, 10, 0]

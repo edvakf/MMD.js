@@ -275,20 +275,26 @@
         this.pause();
         return;
       }
-      this.moveCameraLight();
-      return this.moveModel();
+      this.moveCamera();
+      this.moveLight();
+      this.moveModel();
     };
 
-    MMD.prototype.moveCameraLight = function() {
-      var camera, light, _ref;
-      _ref = this.motionManager.getCameraLightFrame(this.frame), camera = _ref.camera, light = _ref.light;
-      if (camera) {
+    MMD.prototype.moveCamera = function() {
+      var camera;
+      camera = this.motionManager.getCameraFrame(this.frame);
+      if (camera && !this.ignoreCameraMotion) {
         this.distance = camera.distance;
         this.rotx = camera.rotation[0];
         this.roty = camera.rotation[1];
         this.center = vec3.create(camera.location);
         this.fovy = camera.view_angle;
       }
+    };
+
+    MMD.prototype.moveLight = function() {
+      var light;
+      light = this.motionManager.getLightFrame(this.frame);
       if (light) {
         this.lightDirection = light.location;
         this.lightColor = light.color;
@@ -669,7 +675,6 @@
     MMD.prototype.registerKeyListener = function(element) {
       var _this = this;
       element.addEventListener('keydown', function(e) {
-        if (_this.playing) return;
         switch (e.keyCode + e.shiftKey * 1000 + e.ctrlKey * 10000 + e.altKey * 100000) {
           case 37:
             _this.roty += Math.PI / 12;
@@ -731,7 +736,6 @@
       var _this = this;
       element.addEventListener('mousedown', function(e) {
         var modifier, move, onmousemove, onmouseup, ox, oy;
-        if (_this.playing) return;
         if (e.button !== 0) return;
         modifier = e.shiftKey * 1000 + e.ctrlKey * 10000 + e.altKey * 100000;
         if (modifier !== 0 && modifier !== 1000) return;
@@ -780,7 +784,6 @@
       var _this = this;
       onwheel = function(e) {
         var delta;
-        if (_this.playing) return;
         delta = e.detail || e.wheelDelta / (-40);
         _this.distance += delta * _this.distance / _this.DIST;
         _this.redraw = true;
@@ -794,6 +797,7 @@
     };
 
     MMD.prototype.initParameters = function() {
+      this.ignoreCameraMotion = false;
       this.rotx = this.roty = 0;
       this.distance = this.DIST = 35;
       this.center = [0, 10, 0];
