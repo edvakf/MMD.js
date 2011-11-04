@@ -134,14 +134,12 @@
     };
 
     MMD.prototype.initBones = function() {
-      var bone1, bone2, bones, buffer, data, i, idx, j, length, material, model, offset, triangles, vert, vertIndex, verts, vertsVisited, weights, _i, _j, _len, _len2, _ref, _ref2, _ref3;
+      var boneInfo, bones, buffer, i, idx, j, length, material, model, offset, triangles, vert, vertIndex, verts, vertsVisited, _i, _len, _ref, _ref2;
       model = this.model;
       verts = model.vertices;
       length = verts.length;
       vertsVisited = new Uint8Array(length);
-      bone1 = new Float32Array(length);
-      bone2 = new Float32Array(length);
-      weights = new Float32Array(length);
+      boneInfo = new Float32Array(length * 3);
       triangles = model.triangles;
       offset = 0;
       _ref = model.materials;
@@ -155,42 +153,24 @@
             if (vertsVisited[vertIndex] === 1) continue;
             vertsVisited[vertIndex] = 1;
             vert = verts[vertIndex];
-            weights[vertIndex] = vert.bone_weight / 100;
+            boneInfo[vertIndex * 3] = vert.bone_weight / 100;
             idx = bones.indexOf(vert.bone_num1);
             if (idx < 0) idx = bones.push(vert.bone_num1) - 1;
-            bone1[vertIndex] = idx;
+            boneInfo[vertIndex * 3 + 1] = idx;
             idx = bones.indexOf(vert.bone_num2);
             if (idx < 0) idx = bones.push(vert.bone_num2) - 1;
-            bone2[vertIndex] = idx;
+            boneInfo[vertIndex * 3 + 2] = idx;
           }
         }
         material.endIndex = (offset += material.face_vert_count);
       }
-      _ref3 = [
-        {
-          attribute: 'aBone1',
-          array: bone1,
-          size: 1
-        }, {
-          attribute: 'aBone2',
-          array: bone2,
-          size: 1
-        }, {
-          attribute: 'aBoneWeight',
-          array: weights,
-          size: 1
-        }
-      ];
-      for (_j = 0, _len2 = _ref3.length; _j < _len2; _j++) {
-        data = _ref3[_j];
-        buffer = this.gl.createBuffer();
-        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, buffer);
-        this.gl.bufferData(this.gl.ARRAY_BUFFER, data.array, this.gl.STATIC_DRAW);
-        this.vbuffers[data.attribute] = {
-          size: data.size,
-          buffer: buffer
-        };
-      }
+      buffer = this.gl.createBuffer();
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, buffer);
+      this.gl.bufferData(this.gl.ARRAY_BUFFER, boneInfo, this.gl.STATIC_DRAW);
+      this.vbuffers.aBoneInfo = {
+        size: 3,
+        buffer: buffer
+      };
       this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
     };
 

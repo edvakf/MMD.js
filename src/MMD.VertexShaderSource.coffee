@@ -16,9 +16,7 @@ MMD.VertexShaderSource = '''
   uniform vec3 uBonePosMoved[64];
   uniform vec4 uBoneRotations[64]; // quaternion
 
-  attribute float aBone1;
-  attribute float aBone2;
-  attribute float aBoneWeight;
+  attribute vec3 aBoneInfo; // boneWeight, bone1Index, bone2Index
 
   varying vec3 vPosition;
   varying vec3 vNormal;
@@ -44,24 +42,33 @@ MMD.VertexShaderSource = '''
     vec3 normal = aVertexNormal;
 
     if (uBoneMotion) {
-      int b1 = int(aBone1);
+      float weight = aBoneInfo.x;
+
+      int b1 = int(aBoneInfo.y);
       vec3 o1 = uBonePosOriginal[b1];
       vec3 p1 = uBonePosMoved[b1];
       vec4 q1 = uBoneRotations[b1];
       vec3 r1 = qtransform(q1, position - o1) + p1;
-
-      int b2 = int(aBone2);
-      vec3 o2 = uBonePosOriginal[b2];
-      vec3 p2 = uBonePosMoved[b2];
-      vec4 q2 = uBoneRotations[b2];
-      vec3 r2 = qtransform(q2, position - o2) + p2;
-
-      position = mix(r2, r1, aBoneWeight);
-
       vec3 n1 = qtransform(q1, normal);
-      vec3 n2 = qtransform(q2, normal);
 
-      normal = normalize(mix(n2, n1, aBoneWeight));
+      if (weight > 0.99) {
+
+        position = r1;
+        normal = n1;
+
+      } else {
+
+        int b2 = int(aBoneInfo.z);
+        vec3 o2 = uBonePosOriginal[b2];
+        vec3 p2 = uBonePosMoved[b2];
+        vec4 q2 = uBoneRotations[b2];
+        vec3 r2 = qtransform(q2, position - o2) + p2;
+        vec3 n2 = qtransform(q2, normal);
+
+        position = mix(r2, r1, weight);
+        normal = normalize(mix(n2, n1, weight));
+
+      }
     }
 
     // return vertex point in projection space

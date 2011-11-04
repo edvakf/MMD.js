@@ -102,9 +102,7 @@ class this.MMD
     verts = model.vertices
     length = verts.length
     vertsVisited = new Uint8Array(length)
-    bone1 = new Float32Array(length)
-    bone2 = new Float32Array(length)
-    weights = new Float32Array(length)
+    boneInfo = new Float32Array(length * 3)
     triangles = model.triangles
     offset = 0
 
@@ -118,25 +116,20 @@ class this.MMD
           continue if vertsVisited[vertIndex] == 1
           vertsVisited[vertIndex] = 1
           vert = verts[vertIndex]
-          weights[vertIndex] = vert.bone_weight / 100
+          boneInfo[vertIndex * 3] = vert.bone_weight / 100
           idx = bones.indexOf(vert.bone_num1)
           idx = bones.push(vert.bone_num1) - 1 if idx < 0
-          bone1[vertIndex] = idx
+          boneInfo[vertIndex * 3 + 1] = idx
           idx = bones.indexOf(vert.bone_num2)
           idx = bones.push(vert.bone_num2) - 1 if idx < 0
-          bone2[vertIndex] = idx
+          boneInfo[vertIndex * 3 + 2] = idx
 
       material.endIndex = (offset += material.face_vert_count)
 
-    for data in [
-      {attribute: 'aBone1', array: bone1, size: 1},
-      {attribute: 'aBone2', array: bone2, size: 1},
-      {attribute: 'aBoneWeight', array: weights, size: 1},
-    ]
-      buffer = @gl.createBuffer()
-      @gl.bindBuffer(@gl.ARRAY_BUFFER, buffer)
-      @gl.bufferData(@gl.ARRAY_BUFFER, data.array, @gl.STATIC_DRAW)
-      @vbuffers[data.attribute] = {size: data.size, buffer: buffer}
+    buffer = @gl.createBuffer()
+    @gl.bindBuffer(@gl.ARRAY_BUFFER, buffer)
+    @gl.bufferData(@gl.ARRAY_BUFFER, boneInfo, @gl.STATIC_DRAW)
+    @vbuffers.aBoneInfo = {size: 3, buffer: buffer}
 
     @gl.bindBuffer(@gl.ARRAY_BUFFER, null)
     return
