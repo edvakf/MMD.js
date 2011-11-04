@@ -228,7 +228,7 @@
     };
 
     MMD.prototype.start = function() {
-      var step, t0;
+      var before, count, interval, step, t0;
       var _this = this;
       this.gl.clearColor(1, 1, 1, 1);
       this.gl.clearDepth(1);
@@ -236,15 +236,20 @@
       this.redraw = true;
       if (this.drawSelfShadow) this.shadowMap = new MMD.ShadowMap(this);
       this.motionManager = new MMD.MotionManager;
-      t0 = Date.now();
+      count = 0;
+      t0 = before = Date.now();
+      interval = 1000 / this.fps;
       step = function() {
-        var t1;
+        var now;
         _this.move();
         _this.computeMatrices();
         _this.render();
-        t1 = Date.now();
-        setTimeout(step, Math.max(0, 1000 / _this.fps * 2 - (t1 - t0)));
-        return t0 = t1;
+        now = Date.now();
+        if (++count % _this.fps === 0) {
+          _this.realFps = _this.fps / (now - before) * 1000;
+          before = now;
+        }
+        return setTimeout(step, (t0 + count * interval) - now);
       };
       step();
     };
@@ -792,6 +797,7 @@
       this.drawAxes = true;
       this.drawCenterPoint = false;
       this.fps = 30;
+      this.realFps = this.fps;
       this.playing = false;
       this.frame = -1;
     };

@@ -183,17 +183,22 @@ class this.MMD
     @shadowMap = new MMD.ShadowMap(this) if @drawSelfShadow
     @motionManager = new MMD.MotionManager
 
-    t0 = Date.now()
+    count = 0
+    t0 = before = Date.now()
+    interval = 1000 / @fps
+
     step = =>
       @move()
       @computeMatrices()
       @render()
-      t1 = Date.now()
-      #idealInterval = 1000 / @fps
-      #delay = (t1 - t0) - idealInterval
-      #interval = idealInterval - delay # == 1000 / @fps * 2 - (t1 - t0)
-      setTimeout(step, Math.max(0, 1000 / @fps * 2 - (t1 - t0)))
-      t0 = t1
+
+      now = Date.now()
+
+      if ++count % @fps == 0
+        @realFps = @fps / (now - before) * 1000
+        before = now
+
+      setTimeout(step, (t0 + count * interval) - now) # target_time - now
 
     step()
     return
@@ -724,6 +729,7 @@ class this.MMD
     @drawCenterPoint = false
 
     @fps = 30 # redraw every 1000/30 msec
+    @realFps = @fps
     @playing = false
     @frame = -1
     return

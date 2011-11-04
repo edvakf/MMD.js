@@ -28,6 +28,10 @@ window.onload = function() {
       mmd.addModelMotion(miku, dance, true);
 
       mmd.play()
+
+      setInterval(function() {
+        console.log('fps = ' + mmd.realFps);
+      }, 1000);
     });
   });
 };
