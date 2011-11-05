@@ -341,127 +341,136 @@
       }
     };
 
-    MMD.prototype.moveBones = function(model, individualBoneMotions) {
-      var affectedBones, axis, axisLen, bone, bone1, bone2, boneMotions, bonePos, c, getBoneMotion, i, ik, ikbone, ikbonePos, ikboneVec, ikboneVecLen, j, length, maxangle, minLength, motion, motion1, motion2, n, parent, pos1, pos2, positions1, positions2, q, r, rot1, rot2, rotations1, rotations2, sinTheta, target, targetParent, targetPos, targetVec, targetVecLen, theta, vertex, _i, _j, _k, _len, _len2, _len3, _len4, _name, _ref, _ref2, _ref3, _ref4, _ref5;
-      if (!individualBoneMotions) return;
+    MMD.prototype.moveBones = function(model, bones) {
+      var bone, boneMotions, constrainedBones, getBoneMotion, i, individualBoneMotions, length, motion1, motion2, originalBonePositions, parentBones, pos1, pos2, positions1, positions2, resolveIKs, rot1, rot2, rotations1, rotations2, vertex, _len, _ref, _ref2, _ref3;
+      if (!bones) return;
+      individualBoneMotions = [];
+      boneMotions = [];
+      originalBonePositions = [];
+      parentBones = [];
+      constrainedBones = [];
       _ref = model.bones;
-      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-        bone = _ref[_i];
-        if ((_ref2 = individualBoneMotions[_name = bone.name]) == null) {
-          individualBoneMotions[_name] = {
-            rotation: quat4.create([0, 0, 0, 1]),
-            location: vec3.create([0, 0, 0])
-          };
-        }
+      for (i = 0, _len = _ref.length; i < _len; i++) {
+        bone = _ref[i];
+        individualBoneMotions[i] = (_ref2 = bones[bone.name]) != null ? _ref2 : {
+          rotation: quat4.create([0, 0, 0, 1]),
+          location: vec3.create()
+        };
+        boneMotions[i] = {
+          r: quat4.create(),
+          p: vec3.create(),
+          tainted: true
+        };
+        originalBonePositions[i] = bone.head_pos;
+        parentBones[i] = bone.parent_bone_index;
+        if (bone.name.indexOf('\u3072\u3056') > 0) constrainedBones[i] = true;
       }
-      boneMotions = {};
-      getBoneMotion = function(bone) {
-        /*
-                 the position of a bone is found as follows
-                 take the ORIGINAL bone_head vector relative to it's parent's ORIGINAL bone_head,
-                 add translation to it and rotate by parent's rotation,
-                 then add parent's position, i.e.
-                   p_1' = r_2' (p_1 - p_2 + t_1) r_2'^* + p_2'
-                 where p_1 and p_2 are it's and parent's ORIGINAL positions respectively,
-                 t_1 is it's own translation, and r_2' is the parent's rotation
-                 the children of this bone will be affected by the moved position and total rotation
-                   r_1' = r_2' + r_1
-        */
-        var p, parent, parentMotion, r, t, that;
-        if (that = boneMotions[bone.name]) return that;
-        that = individualBoneMotions[bone.name];
-        r = that.rotation;
-        t = that.location;
-        if (bone.parent_bone_index === 0xFFFF) {
-          return boneMotions[bone.name] = {
-            p: vec3.createAdd(bone.head_pos, t),
-            r: r
+      getBoneMotion = function(boneIndex) {
+        var m, motion, p, parentIndex, parentMotion, r, t;
+        motion = boneMotions[boneIndex];
+        if (motion && !motion.tainted) return motion;
+        m = individualBoneMotions[boneIndex];
+        r = quat4.set(m.rotation, motion.r);
+        t = m.location;
+        p = vec3.set(originalBonePositions[boneIndex], motion.p);
+        if (parentBones[boneIndex] === 0xFFFF) {
+          return boneMotions[boneIndex] = {
+            p: vec3.add(p, t),
+            r: r,
+            tainted: false
           };
         } else {
-          parent = model.bones[bone.parent_bone_index];
-          parentMotion = getBoneMotion(parent);
-          r = quat4.createMultiply(parentMotion.r, r);
-          p = vec3.createSubtract(bone.head_pos, parent.head_pos);
-          if ((that = bone.type) === 1 || that === 2) vec3.add(p, t);
+          parentIndex = parentBones[boneIndex];
+          parentMotion = getBoneMotion(parentIndex);
+          r = quat4.multiply(parentMotion.r, r, r);
+          p = vec3.subtract(p, originalBonePositions[parentIndex]);
+          vec3.add(p, t);
           vec3.rotateByQuat4(p, parentMotion.r);
           vec3.add(p, parentMotion.p);
-          return boneMotions[bone.name] = {
+          return boneMotions[boneIndex] = {
             p: p,
-            r: r
+            r: r,
+            tainted: false
           };
         }
       };
-      targetVec = vec3.create();
-      ikboneVec = vec3.create();
-      axis = vec3.create();
-      _ref3 = model.iks;
-      for (_j = 0, _len2 = _ref3.length; _j < _len2; _j++) {
-        ik = _ref3[_j];
-        maxangle = ik.control_weight * 4;
-        affectedBones = (function() {
-          var _k, _len3, _ref4, _results;
-          _ref4 = ik.child_bones;
-          _results = [];
-          for (_k = 0, _len3 = _ref4.length; _k < _len3; _k++) {
-            i = _ref4[_k];
-            _results.push(model.bones[i]);
-          }
-          return _results;
-        })();
-        ikbone = model.bones[ik.bone_index];
-        ikbonePos = getBoneMotion(ikbone).p;
-        target = model.bones[ik.target_bone_index];
-        targetParent = model.bones[target.parent_bone_index];
-        minLength = 0.1 * vec3.length(vec3.subtract(target.head_pos, targetParent.head_pos, axis));
-        for (n = 0, _ref4 = ik.iterations; 0 <= _ref4 ? n < _ref4 : n > _ref4; 0 <= _ref4 ? n++ : n--) {
-          targetPos = getBoneMotion(target).p;
-          if (minLength > vec3.length(vec3.subtract(targetPos, ikbonePos, axis))) {
-            break;
-          }
-          for (i = 0, _len3 = affectedBones.length; i < _len3; i++) {
-            bone = affectedBones[i];
-            motion = getBoneMotion(bone);
-            bonePos = motion.p;
-            if (i > 0) targetPos = getBoneMotion(target).p;
-            targetVec = vec3.subtract(targetPos, bonePos, targetVec);
-            targetVecLen = vec3.length(targetVec);
-            if (targetVecLen < minLength) continue;
-            ikboneVec = vec3.subtract(ikbonePos, bonePos, ikboneVec);
-            ikboneVecLen = vec3.length(ikboneVec);
-            if (ikboneVecLen < minLength) continue;
-            axis = vec3.cross(targetVec, ikboneVec, axis);
-            axisLen = vec3.length(axis);
-            sinTheta = axisLen / ikboneVecLen / targetVecLen;
-            if (sinTheta < 0.001) continue;
-            theta = Math.asin(sinTheta);
-            if (vec3.dot(targetVec, ikboneVec) < 0) {
-              theta = 3.141592653589793 - theta;
+      resolveIKs = function() {
+        var axis, axisLen, boneIndex, bonePos, c, i, ik, ikbonePos, ikboneVec, ikboneVecLen, j, maxangle, minLength, motion, n, parentRotation, q, r, sinTheta, targetIndex, targetPos, targetVec, targetVecLen, theta, tmpQ, tmpR, _i, _len2, _ref3, _results;
+        targetVec = vec3.create();
+        ikboneVec = vec3.create();
+        axis = vec3.create();
+        tmpQ = quat4.create();
+        tmpR = quat4.create();
+        _ref3 = model.iks;
+        _results = [];
+        for (_i = 0, _len2 = _ref3.length; _i < _len2; _i++) {
+          ik = _ref3[_i];
+          maxangle = ik.control_weight * 4;
+          ikbonePos = getBoneMotion(ik.bone_index).p;
+          targetIndex = ik.target_bone_index;
+          minLength = 0.1 * vec3.length(vec3.subtract(originalBonePositions[targetIndex], originalBonePositions[parentBones[targetIndex]], axis));
+          _results.push((function() {
+            var _ref4, _results2;
+            _results2 = [];
+            for (n = 0, _ref4 = ik.iterations; 0 <= _ref4 ? n < _ref4 : n > _ref4; 0 <= _ref4 ? n++ : n--) {
+              targetPos = getBoneMotion(targetIndex).p;
+              if (minLength > vec3.length(vec3.subtract(targetPos, ikbonePos, axis))) {
+                break;
+              }
+              _results2.push((function() {
+                var _len3, _ref5, _results3;
+                _ref5 = ik.child_bones;
+                _results3 = [];
+                for (i = 0, _len3 = _ref5.length; i < _len3; i++) {
+                  boneIndex = _ref5[i];
+                  motion = getBoneMotion(boneIndex);
+                  bonePos = motion.p;
+                  if (i > 0) targetPos = getBoneMotion(targetIndex).p;
+                  targetVec = vec3.subtract(targetPos, bonePos, targetVec);
+                  targetVecLen = vec3.length(targetVec);
+                  if (targetVecLen < minLength) continue;
+                  ikboneVec = vec3.subtract(ikbonePos, bonePos, ikboneVec);
+                  ikboneVecLen = vec3.length(ikboneVec);
+                  if (ikboneVecLen < minLength) continue;
+                  axis = vec3.cross(targetVec, ikboneVec, axis);
+                  axisLen = vec3.length(axis);
+                  sinTheta = axisLen / ikboneVecLen / targetVecLen;
+                  if (sinTheta < 0.001) continue;
+                  theta = Math.asin(sinTheta);
+                  if (vec3.dot(targetVec, ikboneVec) < 0) {
+                    theta = 3.141592653589793 - theta;
+                  }
+                  if (theta > maxangle) theta = maxangle;
+                  q = quat4.set(vec3.scale(axis, Math.sin(theta / 2) / axisLen), tmpQ);
+                  q[3] = Math.cos(theta / 2);
+                  parentRotation = getBoneMotion(parentBones[boneIndex]).r;
+                  r = quat4.inverse(parentRotation, tmpR);
+                  r = quat4.multiply(quat4.multiply(r, q), motion.r);
+                  if (constrainedBones[boneIndex]) {
+                    c = r[3];
+                    r = quat4.set([Math.sqrt(1 - c * c), 0, 0, c], r);
+                    quat4.inverse(boneMotions[boneIndex].r, q);
+                    quat4.multiply(r, q, q);
+                    q = quat4.multiply(parentRotation, q, q);
+                  }
+                  quat4.normalize(r, individualBoneMotions[boneIndex].rotation);
+                  quat4.multiply(q, motion.r, motion.r);
+                  for (j = 0; 0 <= i ? j < i : j > i; 0 <= i ? j++ : j--) {
+                    boneMotions[ik.child_bones[j]].tainted = true;
+                  }
+                  _results3.push(boneMotions[ik.target_bone_index].tainted = true);
+                }
+                return _results3;
+              })());
             }
-            if (theta > maxangle) theta = maxangle;
-            q = quat4.create(vec3.scale(axis, Math.sin(theta / 2) / axisLen));
-            q[3] = Math.cos(theta / 2);
-            parent = model.bones[bone.parent_bone_index];
-            r = quat4.multiply(quat4.multiply(quat4.createInverse(getBoneMotion(parent).r), q), motion.r);
-            if (bone.name.indexOf('\u3072\u3056') >= 0) {
-              c = r[3];
-              r = quat4.set([Math.sqrt(1 - c * c), 0, 0, c], r);
-              quat4.inverse(boneMotions[bone.name].r, q);
-              quat4.multiply(r, q, q);
-              q = quat4.multiply(boneMotions[parent.name].r, q, q);
-            }
-            individualBoneMotions[bone.name].rotation = quat4.normalize(r);
-            boneMotions[bone.name].r = quat4.multiply(q, motion.r);
-            for (j = 0; 0 <= i ? j < i : j > i; 0 <= i ? j++ : j--) {
-              delete boneMotions[affectedBones[j].name];
-            }
-            delete boneMotions[target.name];
-          }
+            return _results2;
+          })());
         }
-      }
-      _ref5 = model.bones;
-      for (_k = 0, _len4 = _ref5.length; _k < _len4; _k++) {
-        bone = _ref5[_k];
-        getBoneMotion(bone);
+        return _results;
+      };
+      resolveIKs();
+      for (i = 0, _ref3 = model.bones.length; 0 <= _ref3 ? i < _ref3 : i > _ref3; 0 <= _ref3 ? i++ : i--) {
+        getBoneMotion(i);
       }
       rotations1 = model.rotations1;
       rotations2 = model.rotations2;
@@ -470,10 +479,8 @@
       length = model.vertices.length;
       for (i = 0; 0 <= length ? i < length : i > length; 0 <= length ? i++ : i--) {
         vertex = model.vertices[i];
-        bone1 = model.bones[vertex.bone_num1];
-        bone2 = model.bones[vertex.bone_num2];
-        motion1 = boneMotions[bone1.name];
-        motion2 = boneMotions[bone2.name];
+        motion1 = boneMotions[vertex.bone_num1];
+        motion2 = boneMotions[vertex.bone_num2];
         rot1 = motion1.r;
         pos1 = motion1.p;
         rot2 = motion2.r;

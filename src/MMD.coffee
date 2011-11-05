@@ -265,108 +265,129 @@ class this.MMD
 
     return
 
-  moveBones: (model, individualBoneMotions) ->
-    return if not individualBoneMotions
-
-    for bone in model.bones
-      individualBoneMotions[bone.name] ?= {
-        rotation: quat4.create([0, 0, 0, 1])
-        location: vec3.create([0, 0, 0])
-      }
-
-    boneMotions = {} # {name: {p, r}}
+  moveBones: (model, bones) ->
+    return if not bones
 
     # individualBoneMotions is translation/rotation of each bone from it's original position
     # boneMotions is total position/rotation of each bone
+    # boneMotions is an array like [{p, r, tainted}]
+    # tainted flag is used to avoid re-creating vec3/quat4
+    individualBoneMotions = []
+    boneMotions = []
+    originalBonePositions = []
+    parentBones = []
+    constrainedBones = []
 
-    getBoneMotion = (bone) ->
-      ###
-         the position of a bone is found as follows
-         take the ORIGINAL bone_head vector relative to it's parent's ORIGINAL bone_head,
-         add translation to it and rotate by parent's rotation,
-         then add parent's position, i.e.
-           p_1' = r_2' (p_1 - p_2 + t_1) r_2'^* + p_2'
-         where p_1 and p_2 are it's and parent's ORIGINAL positions respectively,
-         t_1 is it's own translation, and r_2' is the parent's rotation
-         the children of this bone will be affected by the moved position and total rotation
-           r_1' = r_2' + r_1
-      ###
-      return that if that = boneMotions[bone.name]
-      that = individualBoneMotions[bone.name]
-      r = that.rotation
-      t = that.location
+    for bone, i in model.bones
+      individualBoneMotions[i] = bones[bone.name] ? {
+        rotation: quat4.create([0, 0, 0, 1])
+        location: vec3.create()
+      }
+      boneMotions[i] = {
+        r: quat4.create()
+        p: vec3.create()
+        tainted: true
+      }
+      originalBonePositions[i] = bone.head_pos
+      parentBones[i] = bone.parent_bone_index
+      if bone.name.indexOf('\u3072\u3056') > 0 # ひざ
+        constrainedBones[i] = true # TODO: for now it's only for knees, but extend this if I do PMX
 
-      if bone.parent_bone_index == 0xFFFF # center, foot IK, etc.
-        return boneMotions[bone.name] = {p: vec3.createAdd(bone.head_pos, t), r: r}
+    getBoneMotion = (boneIndex) ->
+      # http://d.hatena.ne.jp/edvakf/20111026/1319656727
+      motion = boneMotions[boneIndex]
+      return motion if motion and not motion.tainted
+
+      m = individualBoneMotions[boneIndex]
+      r = quat4.set(m.rotation, motion.r)
+      t = m.location
+      p = vec3.set(originalBonePositions[boneIndex], motion.p)
+
+      if parentBones[boneIndex] == 0xFFFF # center, foot IK, etc.
+        return boneMotions[boneIndex] = {
+          p: vec3.add(p, t),
+          r: r
+          tainted: false
+        }
       else
-        parent = model.bones[bone.parent_bone_index]
-        parentMotion = getBoneMotion(parent)
-        r = quat4.createMultiply(parentMotion.r, r) # r_2' r_1
-        p = vec3.createSubtract(bone.head_pos, parent.head_pos)
-        vec3.add(p, t) if (that = bone.type) == 1 or that == 2
+        parentIndex = parentBones[boneIndex]
+        parentMotion = getBoneMotion(parentIndex)
+        r = quat4.multiply(parentMotion.r, r, r)
+        p = vec3.subtract(p, originalBonePositions[parentIndex])
+        vec3.add(p, t)
         vec3.rotateByQuat4(p, parentMotion.r)
         vec3.add(p, parentMotion.p)
-        return boneMotions[bone.name] = {p: p, r: r}
+        return boneMotions[boneIndex] = {p: p, r: r, tainted: false}
 
-    # objects to be reused
-    targetVec = vec3.create()
-    ikboneVec = vec3.create()
-    axis = vec3.create()
+    resolveIKs = ->
+      # this function is run only once, but to narrow the scope I'm making a function
+      # http://d.hatena.ne.jp/edvakf/20111102/1320268602
 
-    for ik in model.iks
-      maxangle = ik.control_weight * 4 # angle to move in one iteration
-      affectedBones = (model.bones[i] for i in ik.child_bones)
+      # objects to be reused
+      targetVec = vec3.create()
+      ikboneVec = vec3.create()
+      axis = vec3.create()
+      tmpQ = quat4.create()
+      tmpR = quat4.create()
 
-      ikbone = model.bones[ik.bone_index]
-      ikbonePos = getBoneMotion(ikbone).p
-      target = model.bones[ik.target_bone_index]
-      targetParent = model.bones[target.parent_bone_index]
-      minLength = 0.1 * vec3.length(
-        vec3.subtract(target.head_pos, targetParent.head_pos, axis)) # temporary use of axis
+      for ik in model.iks
+        maxangle = ik.control_weight * 4 # angle to move in one iteration
 
-      for n in [0...ik.iterations]
-        targetPos = getBoneMotion(target).p # this should calculate the whole chain
-        break if minLength > vec3.length(
-          vec3.subtract(targetPos, ikbonePos, axis)) # temporary use of axis
+        ikbonePos = getBoneMotion(ik.bone_index).p
+        targetIndex = ik.target_bone_index
+        minLength = 0.1 * vec3.length(
+          vec3.subtract(
+            originalBonePositions[targetIndex],
+            originalBonePositions[parentBones[targetIndex]], axis)) # temporary use of axis
 
-        for bone, i in affectedBones
-          motion = getBoneMotion(bone)
-          bonePos = motion.p
-          targetPos = getBoneMotion(target).p if i > 0
-          targetVec = vec3.subtract(targetPos, bonePos, targetVec)
-          targetVecLen = vec3.length(targetVec)
-          continue if targetVecLen < minLength # targetPos == bonePos
-          ikboneVec = vec3.subtract(ikbonePos, bonePos, ikboneVec)
-          ikboneVecLen = vec3.length(ikboneVec)
-          continue if ikboneVecLen < minLength # ikbonePos == bonePos
-          axis = vec3.cross(targetVec, ikboneVec, axis)
-          axisLen = vec3.length(axis)
-          sinTheta = axisLen / ikboneVecLen / targetVecLen
-          continue if sinTheta < 0.001 # ~0.05 degree
-          theta = Math.asin(sinTheta)
-          theta = 3.141592653589793 - theta if vec3.dot(targetVec, ikboneVec) < 0
-          theta = maxangle if theta > maxangle
-          q = quat4.create(vec3.scale(axis, Math.sin(theta / 2) / axisLen))
-          q[3] = Math.cos(theta / 2)
-          parent = model.bones[bone.parent_bone_index]
-          r = quat4.multiply(quat4.multiply(
-            quat4.createInverse(getBoneMotion(parent).r), q), motion.r)
+        for n in [0...ik.iterations]
+          targetPos = getBoneMotion(targetIndex).p # this should calculate the whole chain
+          break if minLength > vec3.length(
+            vec3.subtract(targetPos, ikbonePos, axis)) # temporary use of axis
 
-          if bone.name.indexOf('\u3072\u3056') >= 0 # ひざ
-            c = r[3] # cos(theta / 2)
-            r = quat4.set([Math.sqrt(1 - c * c), 0, 0, c], r) # axis must be x direction
-            quat4.inverse(boneMotions[bone.name].r, q)
-            quat4.multiply(r, q, q)
-            q = quat4.multiply(boneMotions[parent.name].r, q, q)
+          for boneIndex, i in ik.child_bones
+            motion = getBoneMotion(boneIndex)
+            bonePos = motion.p
+            targetPos = getBoneMotion(targetIndex).p if i > 0
+            targetVec = vec3.subtract(targetPos, bonePos, targetVec)
+            targetVecLen = vec3.length(targetVec)
+            continue if targetVecLen < minLength # targetPos == bonePos
+            ikboneVec = vec3.subtract(ikbonePos, bonePos, ikboneVec)
+            ikboneVecLen = vec3.length(ikboneVec)
+            continue if ikboneVecLen < minLength # ikbonePos == bonePos
+            axis = vec3.cross(targetVec, ikboneVec, axis)
+            axisLen = vec3.length(axis)
+            sinTheta = axisLen / ikboneVecLen / targetVecLen
+            continue if sinTheta < 0.001 # ~0.05 degree
+            theta = Math.asin(sinTheta)
+            theta = 3.141592653589793 - theta if vec3.dot(targetVec, ikboneVec) < 0
+            theta = maxangle if theta > maxangle
+            q = quat4.set(vec3.scale(axis, Math.sin(theta / 2) / axisLen), tmpQ) # q is tmpQ
+            q[3] = Math.cos(theta / 2)
+            parentRotation = getBoneMotion(parentBones[boneIndex]).r
+            r = quat4.inverse(parentRotation, tmpR) # r is tmpR
+            r = quat4.multiply(quat4.multiply(r, q), motion.r)
 
-          individualBoneMotions[bone.name].rotation = quat4.normalize(r)
-          boneMotions[bone.name].r = quat4.multiply(q, motion.r)
+            if constrainedBones[boneIndex]
+              c = r[3] # cos(theta / 2)
+              r = quat4.set([Math.sqrt(1 - c * c), 0, 0, c], r) # axis must be x direction
+              quat4.inverse(boneMotions[boneIndex].r, q)
+              quat4.multiply(r, q, q)
+              q = quat4.multiply(parentRotation, q, q)
 
-          delete boneMotions[affectedBones[j].name] for j in [0...i]
-          delete boneMotions[target.name]
+            # update individualBoneMotions[boneIndex].rotation
+            quat4.normalize(r, individualBoneMotions[boneIndex].rotation)
+            # update boneMotions[boneIndex].r which is the same as motion.r
+            quat4.multiply(q, motion.r, motion.r)
 
-    for bone in model.bones
-      getBoneMotion(bone)
+            # taint for re-calculation
+            boneMotions[ik.child_bones[j]].tainted = true for j in [0...i]
+            boneMotions[ik.target_bone_index].tainted = true
+
+    resolveIKs()
+
+    # calculate positions/rotations of bones other than IK
+    getBoneMotion(i) for i in [0...model.bones.length]
 
     #TODO: split
 
@@ -378,10 +399,8 @@ class this.MMD
     length = model.vertices.length
     for i in [0...length]
       vertex = model.vertices[i]
-      bone1 = model.bones[vertex.bone_num1]
-      bone2 = model.bones[vertex.bone_num2]
-      motion1 = boneMotions[bone1.name]
-      motion2 = boneMotions[bone2.name]
+      motion1 = boneMotions[vertex.bone_num1]
+      motion2 = boneMotions[vertex.bone_num2]
       rot1 = motion1.r
       pos1 = motion1.p
       rot2 = motion2.r
