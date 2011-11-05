@@ -75,24 +75,44 @@
     MMD.prototype.initBuffers = function() {
       this.vbuffers = {};
       this.initVertices();
-      this.initBones();
       this.initIndices();
       this.initTextures();
     };
 
     MMD.prototype.initVertices = function() {
-      var buffer, data, edge, i, length, model, normals, positions, uvs, vertex, _i, _len, _ref;
+      var bone1, bone2, buffer, data, edge, i, length, model, morphVec, normals, positions1, positions2, rotations1, rotations2, uvs, vectors1, vectors2, vertex, weight, _i, _len, _ref;
       model = this.model;
       length = model.vertices.length;
-      positions = new Float32Array(3 * length);
+      weight = new Float32Array(length);
+      vectors1 = new Float32Array(3 * length);
+      vectors2 = new Float32Array(3 * length);
+      rotations1 = new Float32Array(4 * length);
+      rotations2 = new Float32Array(4 * length);
+      positions1 = new Float32Array(3 * length);
+      positions2 = new Float32Array(3 * length);
+      morphVec = new Float32Array(3 * length);
       normals = new Float32Array(3 * length);
       uvs = new Float32Array(2 * length);
       edge = new Float32Array(length);
       for (i = 0; 0 <= length ? i < length : i > length; 0 <= length ? i++ : i--) {
         vertex = model.vertices[i];
-        positions[3 * i] = vertex.x;
-        positions[3 * i + 1] = vertex.y;
-        positions[3 * i + 2] = vertex.z;
+        bone1 = model.bones[vertex.bone_num1];
+        bone2 = model.bones[vertex.bone_num2];
+        weight[i] = vertex.bone_weight;
+        vectors1[3 * i] = vertex.x - bone1.head_pos[0];
+        vectors1[3 * i + 1] = vertex.y - bone1.head_pos[1];
+        vectors1[3 * i + 2] = vertex.z - bone1.head_pos[2];
+        vectors2[3 * i] = vertex.x - bone2.head_pos[0];
+        vectors2[3 * i + 1] = vertex.y - bone2.head_pos[1];
+        vectors2[3 * i + 2] = vertex.z - bone2.head_pos[2];
+        positions1[3 * i] = bone1.head_pos[0];
+        positions1[3 * i + 1] = bone1.head_pos[1];
+        positions1[3 * i + 2] = bone1.head_pos[2];
+        positions2[3 * i] = bone2.head_pos[0];
+        positions2[3 * i + 1] = bone2.head_pos[1];
+        positions2[3 * i + 2] = bone2.head_pos[2];
+        rotations1[4 * i + 3] = 1;
+        rotations2[4 * i + 3] = 1;
         normals[3 * i] = vertex.nx;
         normals[3 * i + 1] = vertex.ny;
         normals[3 * i + 2] = vertex.nz;
@@ -100,11 +120,43 @@
         uvs[2 * i + 1] = vertex.v;
         edge[i] = 1 - vertex.edge_flag;
       }
-      model.positions = positions;
+      model.rotations1 = rotations1;
+      model.rotations2 = rotations2;
+      model.positions1 = positions1;
+      model.positions2 = positions2;
+      model.morphVec = morphVec;
       _ref = [
         {
-          attribute: 'aVertexPosition',
-          array: positions,
+          attribute: 'aBoneWeight',
+          array: weight,
+          size: 1
+        }, {
+          attribute: 'aVectorFromBone1',
+          array: vectors1,
+          size: 3
+        }, {
+          attribute: 'aVectorFromBone2',
+          array: vectors2,
+          size: 3
+        }, {
+          attribute: 'aBone1Rotation',
+          array: rotations1,
+          size: 4
+        }, {
+          attribute: 'aBone2Rotation',
+          array: rotations2,
+          size: 4
+        }, {
+          attribute: 'aBone1Position',
+          array: positions1,
+          size: 3
+        }, {
+          attribute: 'aBone2Position',
+          array: positions2,
+          size: 3
+        }, {
+          attribute: 'aMultiPurposeVector',
+          array: morphVec,
           size: 3
         }, {
           attribute: 'aVertexNormal',
@@ -130,47 +182,6 @@
           buffer: buffer
         };
       }
-      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
-    };
-
-    MMD.prototype.initBones = function() {
-      var boneInfo, bones, buffer, i, idx, j, length, material, model, offset, triangles, vert, vertIndex, verts, vertsVisited, _i, _len, _ref, _ref2;
-      model = this.model;
-      verts = model.vertices;
-      length = verts.length;
-      vertsVisited = new Uint8Array(length);
-      boneInfo = new Float32Array(length * 3);
-      triangles = model.triangles;
-      offset = 0;
-      _ref = model.materials;
-      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-        material = _ref[_i];
-        bones = material.bones = [];
-        material.startIndex = offset;
-        for (i = 0, _ref2 = material.face_vert_count; i < _ref2; i += 3) {
-          for (j = 0; j < 3; j++) {
-            vertIndex = triangles[offset + i + j];
-            if (vertsVisited[vertIndex] === 1) continue;
-            vertsVisited[vertIndex] = 1;
-            vert = verts[vertIndex];
-            boneInfo[vertIndex * 3] = vert.bone_weight / 100;
-            idx = bones.indexOf(vert.bone_num1);
-            if (idx < 0) idx = bones.push(vert.bone_num1) - 1;
-            boneInfo[vertIndex * 3 + 1] = idx;
-            idx = bones.indexOf(vert.bone_num2);
-            if (idx < 0) idx = bones.push(vert.bone_num2) - 1;
-            boneInfo[vertIndex * 3 + 2] = idx;
-          }
-        }
-        material.endIndex = (offset += material.face_vert_count);
-      }
-      buffer = this.gl.createBuffer();
-      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, buffer);
-      this.gl.bufferData(this.gl.ARRAY_BUFFER, boneInfo, this.gl.STATIC_DRAW);
-      this.vbuffers.aBoneInfo = {
-        size: 3,
-        buffer: buffer
-      };
       this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
     };
 
@@ -312,26 +323,26 @@
           vert = _ref2[_i];
           b = base.vert_data[vert.index];
           i = b.index;
-          model.positions[3 * i] += vert.x * weight;
-          model.positions[3 * i + 1] += vert.y * weight;
-          model.positions[3 * i + 2] += vert.z * weight;
+          model.morphVec[3 * i] += vert.x * weight;
+          model.morphVec[3 * i + 1] += vert.y * weight;
+          model.morphVec[3 * i + 2] += vert.z * weight;
         }
       }
-      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.vbuffers.aVertexPosition.buffer);
-      this.gl.bufferData(this.gl.ARRAY_BUFFER, model.positions, this.gl.STATIC_DRAW);
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.vbuffers.aMultiPurposeVector.buffer);
+      this.gl.bufferData(this.gl.ARRAY_BUFFER, model.morphVec, this.gl.STATIC_DRAW);
       this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
       _ref3 = base.vert_data;
       for (_j = 0, _len3 = _ref3.length; _j < _len3; _j++) {
         b = _ref3[_j];
         i = b.index;
-        model.positions[3 * i] = b.x;
-        model.positions[3 * i + 1] = b.y;
-        model.positions[3 * i + 2] = b.z;
+        model.morphVec[3 * i] = 0;
+        model.morphVec[3 * i + 1] = 0;
+        model.morphVec[3 * i + 2] = 0;
       }
     };
 
     MMD.prototype.moveBones = function(model, individualBoneMotions) {
-      var affectedBones, axis, axisLen, bone, boneMotions, bonePos, c, getBoneMotion, i, ik, ikbone, ikbonePos, ikboneVec, ikboneVecLen, j, maxangle, minLength, motion, n, parent, q, r, sinTheta, target, targetParent, targetPos, targetVec, targetVecLen, theta, _i, _j, _k, _len, _len2, _len3, _len4, _name, _ref, _ref2, _ref3, _ref4, _ref5;
+      var affectedBones, axis, axisLen, bone, bone1, bone2, boneMotions, bonePos, c, getBoneMotion, i, ik, ikbone, ikbonePos, ikboneVec, ikboneVecLen, j, length, maxangle, minLength, motion, motion1, motion2, n, parent, pos1, pos2, positions1, positions2, q, r, rot1, rot2, rotations1, rotations2, sinTheta, target, targetParent, targetPos, targetVec, targetVecLen, theta, vertex, _i, _j, _k, _len, _len2, _len3, _len4, _name, _ref, _ref2, _ref3, _ref4, _ref5;
       if (!individualBoneMotions) return;
       _ref = model.bones;
       for (_i = 0, _len = _ref.length; _i < _len; _i++) {
@@ -452,7 +463,45 @@
         bone = _ref5[_k];
         getBoneMotion(bone);
       }
-      model.boneMotions = boneMotions;
+      rotations1 = model.rotations1;
+      rotations2 = model.rotations2;
+      positions1 = model.positions1;
+      positions2 = model.positions2;
+      length = model.vertices.length;
+      for (i = 0; 0 <= length ? i < length : i > length; 0 <= length ? i++ : i--) {
+        vertex = model.vertices[i];
+        bone1 = model.bones[vertex.bone_num1];
+        bone2 = model.bones[vertex.bone_num2];
+        motion1 = boneMotions[bone1.name];
+        motion2 = boneMotions[bone2.name];
+        rot1 = motion1.r;
+        pos1 = motion1.p;
+        rot2 = motion2.r;
+        pos2 = motion2.p;
+        rotations1[i * 4] = rot1[0];
+        rotations1[i * 4 + 1] = rot1[1];
+        rotations1[i * 4 + 2] = rot1[2];
+        rotations1[i * 4 + 3] = rot1[3];
+        rotations2[i * 4] = rot2[0];
+        rotations2[i * 4 + 1] = rot2[1];
+        rotations2[i * 4 + 2] = rot2[2];
+        rotations2[i * 4 + 3] = rot2[3];
+        positions1[i * 3] = pos1[0];
+        positions1[i * 3 + 1] = pos1[1];
+        positions1[i * 3 + 2] = pos1[2];
+        positions2[i * 3] = pos2[0];
+        positions2[i * 3 + 1] = pos2[1];
+        positions2[i * 3 + 2] = pos2[2];
+      }
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.vbuffers.aBone1Rotation.buffer);
+      this.gl.bufferData(this.gl.ARRAY_BUFFER, rotations1, this.gl.STATIC_DRAW);
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.vbuffers.aBone2Rotation.buffer);
+      this.gl.bufferData(this.gl.ARRAY_BUFFER, rotations2, this.gl.STATIC_DRAW);
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.vbuffers.aBone1Position.buffer);
+      this.gl.bufferData(this.gl.ARRAY_BUFFER, positions1, this.gl.STATIC_DRAW);
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.vbuffers.aBone2Position.buffer);
+      this.gl.bufferData(this.gl.ARRAY_BUFFER, positions2, this.gl.STATIC_DRAW);
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
     };
 
     MMD.prototype.computeMatrices = function() {
@@ -471,26 +520,8 @@
       this.nMatrix = mat4.inverseTranspose(this.mvMatrix, mat4.create());
     };
 
-    MMD.prototype.reindexBones = function(model, bones) {
-      var bone, boneIndex, bonePosMoved, bonePosOriginal, boneRotations, motion, _i, _len;
-      bonePosOriginal = [];
-      bonePosMoved = [];
-      boneRotations = [];
-      for (_i = 0, _len = bones.length; _i < _len; _i++) {
-        boneIndex = bones[_i];
-        bone = model.bones[boneIndex];
-        bonePosOriginal.push(bone.head_pos[0], bone.head_pos[1], bone.head_pos[2]);
-        motion = model.boneMotions[bone.name];
-        boneRotations.push(motion.r[0], motion.r[1], motion.r[2], motion.r[3]);
-        bonePosMoved.push(motion.p[0], motion.p[1], motion.p[2]);
-      }
-      this.gl.uniform3fv(this.program.uBonePosOriginal, bonePosOriginal);
-      this.gl.uniform3fv(this.program.uBonePosMoved, bonePosMoved);
-      this.gl.uniform4fv(this.program.uBoneRotations, boneRotations);
-    };
-
     MMD.prototype.render = function() {
-      var attribute, material, vb, _i, _j, _len, _len2, _ref, _ref2, _ref3;
+      var attribute, material, offset, vb, _i, _j, _len, _len2, _ref, _ref2, _ref3;
       if (!this.redraw && !this.playing) return;
       this.redraw = false;
       this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
@@ -508,26 +539,20 @@
       this.gl.enable(this.gl.CULL_FACE);
       this.gl.enable(this.gl.BLEND);
       this.gl.blendFuncSeparate(this.gl.SRC_ALPHA, this.gl.ONE_MINUS_SRC_ALPHA, this.gl.SRC_ALPHA, this.gl.DST_ALPHA);
+      offset = 0;
       _ref2 = this.model.materials;
       for (_i = 0, _len = _ref2.length; _i < _len; _i++) {
         material = _ref2[_i];
-        if (this.model.boneMotions) {
-          this.reindexBones(this.model, material.bones);
-          this.gl.uniform1i(this.program.uBoneMotion, true);
-        }
-        this.renderMaterial(material);
-        this.gl.uniform1i(this.program.uBoneMotion, false);
+        this.renderMaterial(material, offset);
+        offset += material.face_vert_count;
       }
       this.gl.disable(this.gl.BLEND);
+      offset = 0;
       _ref3 = this.model.materials;
       for (_j = 0, _len2 = _ref3.length; _j < _len2; _j++) {
         material = _ref3[_j];
-        if (this.model.boneMotions) {
-          this.reindexBones(this.model, material.bones);
-          this.gl.uniform1i(this.program.uBoneMotion, true);
-        }
-        this.renderEdge(material);
-        this.gl.uniform1i(this.program.uBoneMotion, false);
+        this.renderEdge(material, offset);
+        offset += material.face_vert_count;
       }
       this.gl.disable(this.gl.CULL_FACE);
       this.renderAxes();
@@ -535,23 +560,18 @@
     };
 
     MMD.prototype.setSelfShadowTexture = function() {
-      var material, model, offset, sectionLength, _i, _len, _ref, _ref2;
+      var material, model, offset, _i, _len, _ref, _ref2;
       if (!this.drawSelfShadow) return;
       model = this.model;
       this.shadowMap.computeMatrices();
       this.shadowMap.beforeRender();
+      offset = 0;
       _ref = model.materials;
       for (_i = 0, _len = _ref.length; _i < _len; _i++) {
         material = _ref[_i];
         if ((0.979 < (_ref2 = material.alpha) && _ref2 < 0.981)) continue;
-        if (this.model.boneMotions) {
-          this.reindexBones(model, material.bones);
-          this.gl.uniform1i(this.program.uBoneMotion, true);
-        }
-        sectionLength = material.endIndex - material.startIndex;
-        offset = material.startIndex * 2;
-        this.gl.drawElements(this.gl.TRIANGLES, sectionLength, this.gl.UNSIGNED_SHORT, offset);
-        this.gl.uniform1i(this.program.uBoneMotion, false);
+        this.gl.drawElements(this.gl.TRIANGLES, material.face_vert_count, this.gl.UNSIGNED_SHORT, offset * 2);
+        offset += material.face_vert_count;
       }
       this.shadowMap.afterRender();
       this.gl.activeTexture(this.gl.TEXTURE3);
@@ -576,8 +596,8 @@
       this.gl.uniform3fv(this.program.uLightColor, this.lightColor);
     };
 
-    MMD.prototype.renderMaterial = function(material) {
-      var offset, sectionLength, textures;
+    MMD.prototype.renderMaterial = function(material, offset) {
+      var textures;
       this.gl.uniform3fv(this.program.uAmbientColor, material.ambient);
       this.gl.uniform3fv(this.program.uSpecularColor, material.specular);
       this.gl.uniform3fv(this.program.uDiffuseColor, material.diffuse);
@@ -604,19 +624,14 @@
         this.gl.uniform1i(this.program.uUseSphereMap, false);
       }
       this.gl.cullFace(this.gl.BACK);
-      sectionLength = material.endIndex - material.startIndex;
-      offset = material.startIndex * 2;
-      this.gl.drawElements(this.gl.TRIANGLES, sectionLength, this.gl.UNSIGNED_SHORT, offset);
+      this.gl.drawElements(this.gl.TRIANGLES, material.face_vert_count, this.gl.UNSIGNED_SHORT, offset * 2);
     };
 
-    MMD.prototype.renderEdge = function(material) {
-      var offset, sectionLength;
+    MMD.prototype.renderEdge = function(material, offset) {
       if (!this.drawEdge || !material.edge_flag) return;
       this.gl.uniform1i(this.program.uEdge, true);
       this.gl.cullFace(this.gl.FRONT);
-      sectionLength = material.endIndex - material.startIndex;
-      offset = material.startIndex * 2;
-      this.gl.drawElements(this.gl.TRIANGLES, sectionLength, this.gl.UNSIGNED_SHORT, offset);
+      this.gl.drawElements(this.gl.TRIANGLES, material.face_vert_count, this.gl.UNSIGNED_SHORT, offset * 2);
       this.gl.cullFace(this.gl.BACK);
       return this.gl.uniform1i(this.program.uEdge, false);
     };
@@ -625,7 +640,7 @@
       var axis, axisBuffer, color, i;
       axisBuffer = this.gl.createBuffer();
       this.gl.bindBuffer(this.gl.ARRAY_BUFFER, axisBuffer);
-      this.gl.vertexAttribPointer(this.program.aVertexPosition, 3, this.gl.FLOAT, false, 0, 0);
+      this.gl.vertexAttribPointer(this.program.aMultiPurposeVector, 3, this.gl.FLOAT, false, 0, 0);
       if (this.drawAxes) {
         this.gl.uniform1i(this.program.uAxis, true);
         for (i = 0; i < 3; i++) {

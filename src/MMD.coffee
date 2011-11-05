@@ -57,7 +57,6 @@ class this.MMD
   initBuffers: ->
     @vbuffers = {}
     @initVertices()
-    @initBones()
     @initIndices()
     @initTextures()
     return
@@ -66,25 +65,57 @@ class this.MMD
     model = @model
 
     length = model.vertices.length
-    positions = new Float32Array(3 * length)
+    weight = new Float32Array(length)
+    vectors1 = new Float32Array(3 * length)
+    vectors2 = new Float32Array(3 * length)
+    rotations1 = new Float32Array(4 * length)
+    rotations2 = new Float32Array(4 * length)
+    positions1 = new Float32Array(3 * length)
+    positions2 = new Float32Array(3 * length)
+    morphVec = new Float32Array(3 * length)
     normals = new Float32Array(3 * length)
     uvs = new Float32Array(2 * length)
     edge = new Float32Array(length)
     for i in [0...length]
       vertex = model.vertices[i]
-      positions[3 * i    ] = vertex.x
-      positions[3 * i + 1] = vertex.y
-      positions[3 * i + 2] = vertex.z
+      bone1 = model.bones[vertex.bone_num1]
+      bone2 = model.bones[vertex.bone_num2]
+      weight[i] = vertex.bone_weight
+      vectors1[3 * i    ] = vertex.x - bone1.head_pos[0]
+      vectors1[3 * i + 1] = vertex.y - bone1.head_pos[1]
+      vectors1[3 * i + 2] = vertex.z - bone1.head_pos[2]
+      vectors2[3 * i    ] = vertex.x - bone2.head_pos[0]
+      vectors2[3 * i + 1] = vertex.y - bone2.head_pos[1]
+      vectors2[3 * i + 2] = vertex.z - bone2.head_pos[2]
+      positions1[3 * i    ] = bone1.head_pos[0]
+      positions1[3 * i + 1] = bone1.head_pos[1]
+      positions1[3 * i + 2] = bone1.head_pos[2]
+      positions2[3 * i    ] = bone2.head_pos[0]
+      positions2[3 * i + 1] = bone2.head_pos[1]
+      positions2[3 * i + 2] = bone2.head_pos[2]
+      rotations1[4 * i + 3] = 1
+      rotations2[4 * i + 3] = 1
       normals[3 * i    ] = vertex.nx
       normals[3 * i + 1] = vertex.ny
       normals[3 * i + 2] = vertex.nz
       uvs[2 * i    ] = vertex.u
       uvs[2 * i + 1] = vertex.v
       edge[i] = 1 - vertex.edge_flag
-    model.positions = positions
+    model.rotations1 = rotations1
+    model.rotations2 = rotations2
+    model.positions1 = positions1
+    model.positions2 = positions2
+    model.morphVec = morphVec
 
     for data in [
-      {attribute: 'aVertexPosition', array: positions, size: 3},
+      {attribute: 'aBoneWeight', array: weight, size: 1},
+      {attribute: 'aVectorFromBone1', array: vectors1, size: 3},
+      {attribute: 'aVectorFromBone2', array: vectors2, size: 3},
+      {attribute: 'aBone1Rotation', array: rotations1, size: 4},
+      {attribute: 'aBone2Rotation', array: rotations2, size: 4},
+      {attribute: 'aBone1Position', array: positions1, size: 3},
+      {attribute: 'aBone2Position', array: positions2, size: 3},
+      {attribute: 'aMultiPurposeVector', array: morphVec, size: 3},
       {attribute: 'aVertexNormal', array: normals, size: 3},
       {attribute: 'aTextureCoord', array: uvs, size: 2},
       {attribute: 'aVertexEdge', array: edge, size: 1},
@@ -93,43 +124,6 @@ class this.MMD
       @gl.bindBuffer(@gl.ARRAY_BUFFER, buffer)
       @gl.bufferData(@gl.ARRAY_BUFFER, data.array, @gl.STATIC_DRAW)
       @vbuffers[data.attribute] = {size: data.size, buffer: buffer}
-
-    @gl.bindBuffer(@gl.ARRAY_BUFFER, null)
-    return
-
-  initBones: ->
-    model = @model
-    verts = model.vertices
-    length = verts.length
-    vertsVisited = new Uint8Array(length)
-    boneInfo = new Float32Array(length * 3)
-    triangles = model.triangles
-    offset = 0
-
-    for material in model.materials
-      bones = material.bones = []
-      material.startIndex = offset
-
-      for i in [0...material.face_vert_count] by 3
-        for j in [0...3]
-          vertIndex = triangles[offset + i + j]
-          continue if vertsVisited[vertIndex] == 1
-          vertsVisited[vertIndex] = 1
-          vert = verts[vertIndex]
-          boneInfo[vertIndex * 3] = vert.bone_weight / 100
-          idx = bones.indexOf(vert.bone_num1)
-          idx = bones.push(vert.bone_num1) - 1 if idx < 0
-          boneInfo[vertIndex * 3 + 1] = idx
-          idx = bones.indexOf(vert.bone_num2)
-          idx = bones.push(vert.bone_num2) - 1 if idx < 0
-          boneInfo[vertIndex * 3 + 2] = idx
-
-      material.endIndex = (offset += material.face_vert_count)
-
-    buffer = @gl.createBuffer()
-    @gl.bindBuffer(@gl.ARRAY_BUFFER, buffer)
-    @gl.bufferData(@gl.ARRAY_BUFFER, boneInfo, @gl.STATIC_DRAW)
-    @vbuffers.aBoneInfo = {size: 3, buffer: buffer}
 
     @gl.bindBuffer(@gl.ARRAY_BUFFER, null)
     return
@@ -254,20 +248,20 @@ class this.MMD
       for vert in morph.vert_data
         b = base.vert_data[vert.index]
         i = b.index
-        model.positions[3 * i    ] += vert.x * weight
-        model.positions[3 * i + 1] += vert.y * weight
-        model.positions[3 * i + 2] += vert.z * weight
+        model.morphVec[3 * i    ] += vert.x * weight
+        model.morphVec[3 * i + 1] += vert.y * weight
+        model.morphVec[3 * i + 2] += vert.z * weight
 
-    @gl.bindBuffer(@gl.ARRAY_BUFFER, @vbuffers.aVertexPosition.buffer)
-    @gl.bufferData(@gl.ARRAY_BUFFER, model.positions, @gl.STATIC_DRAW)
+    @gl.bindBuffer(@gl.ARRAY_BUFFER, @vbuffers.aMultiPurposeVector.buffer)
+    @gl.bufferData(@gl.ARRAY_BUFFER, model.morphVec, @gl.STATIC_DRAW)
     @gl.bindBuffer(@gl.ARRAY_BUFFER, null)
 
     # reset positions
     for b in base.vert_data
       i = b.index
-      model.positions[3 * i    ] = b.x
-      model.positions[3 * i + 1] = b.y
-      model.positions[3 * i + 2] = b.z
+      model.morphVec[3 * i    ] = 0
+      model.morphVec[3 * i + 1] = 0
+      model.morphVec[3 * i + 2] = 0
 
     return
 
@@ -374,8 +368,48 @@ class this.MMD
     for bone in model.bones
       getBoneMotion(bone)
 
-    model.boneMotions = boneMotions
+    #TODO: split
 
+    rotations1 = model.rotations1
+    rotations2 = model.rotations2
+    positions1 = model.positions1
+    positions2 = model.positions2
+
+    length = model.vertices.length
+    for i in [0...length]
+      vertex = model.vertices[i]
+      bone1 = model.bones[vertex.bone_num1]
+      bone2 = model.bones[vertex.bone_num2]
+      motion1 = boneMotions[bone1.name]
+      motion2 = boneMotions[bone2.name]
+      rot1 = motion1.r
+      pos1 = motion1.p
+      rot2 = motion2.r
+      pos2 = motion2.p
+      rotations1[i * 4    ] = rot1[0]
+      rotations1[i * 4 + 1] = rot1[1]
+      rotations1[i * 4 + 2] = rot1[2]
+      rotations1[i * 4 + 3] = rot1[3]
+      rotations2[i * 4    ] = rot2[0]
+      rotations2[i * 4 + 1] = rot2[1]
+      rotations2[i * 4 + 2] = rot2[2]
+      rotations2[i * 4 + 3] = rot2[3]
+      positions1[i * 3    ] = pos1[0]
+      positions1[i * 3 + 1] = pos1[1]
+      positions1[i * 3 + 2] = pos1[2]
+      positions2[i * 3    ] = pos2[0]
+      positions2[i * 3 + 1] = pos2[1]
+      positions2[i * 3 + 2] = pos2[2]
+
+    @gl.bindBuffer(@gl.ARRAY_BUFFER, @vbuffers.aBone1Rotation.buffer)
+    @gl.bufferData(@gl.ARRAY_BUFFER, rotations1, @gl.STATIC_DRAW)
+    @gl.bindBuffer(@gl.ARRAY_BUFFER, @vbuffers.aBone2Rotation.buffer)
+    @gl.bufferData(@gl.ARRAY_BUFFER, rotations2, @gl.STATIC_DRAW)
+    @gl.bindBuffer(@gl.ARRAY_BUFFER, @vbuffers.aBone1Position.buffer)
+    @gl.bufferData(@gl.ARRAY_BUFFER, positions1, @gl.STATIC_DRAW)
+    @gl.bindBuffer(@gl.ARRAY_BUFFER, @vbuffers.aBone2Position.buffer)
+    @gl.bufferData(@gl.ARRAY_BUFFER, positions2, @gl.STATIC_DRAW)
+    @gl.bindBuffer(@gl.ARRAY_BUFFER, null)
     return
 
   computeMatrices: ->
@@ -401,21 +435,6 @@ class this.MMD
     @nMatrix = mat4.inverseTranspose(@mvMatrix, mat4.create())
     return
 
-  reindexBones: (model, bones) ->
-    bonePosOriginal = []
-    bonePosMoved = []
-    boneRotations = []
-    for boneIndex in bones
-      bone = model.bones[boneIndex]
-      bonePosOriginal.push(bone.head_pos[0], bone.head_pos[1], bone.head_pos[2])
-      motion = model.boneMotions[bone.name]
-      boneRotations.push(motion.r[0], motion.r[1], motion.r[2], motion.r[3])
-      bonePosMoved.push(motion.p[0], motion.p[1], motion.p[2])
-    @gl.uniform3fv(@program.uBonePosOriginal, bonePosOriginal)
-    @gl.uniform3fv(@program.uBonePosMoved, bonePosMoved)
-    @gl.uniform4fv(@program.uBoneRotations, boneRotations)
-    return
-
   render: ->
     return if not @redraw and not @playing
     @redraw = false
@@ -438,25 +457,17 @@ class this.MMD
     @gl.enable(@gl.BLEND)
     @gl.blendFuncSeparate(@gl.SRC_ALPHA, @gl.ONE_MINUS_SRC_ALPHA, @gl.SRC_ALPHA, @gl.DST_ALPHA)
 
+    offset = 0
     for material in @model.materials
-      if @model.boneMotions
-        @reindexBones(@model, material.bones)
-        @gl.uniform1i(@program.uBoneMotion, true)
-
-      @renderMaterial(material)
-
-      @gl.uniform1i(@program.uBoneMotion, false)
+      @renderMaterial(material, offset)
+      offset += material.face_vert_count
 
     @gl.disable(@gl.BLEND)
 
+    offset = 0
     for material in @model.materials
-      if @model.boneMotions
-        @reindexBones(@model, material.bones)
-        @gl.uniform1i(@program.uBoneMotion, true)
-
-      @renderEdge(material)
-
-      @gl.uniform1i(@program.uBoneMotion, false)
+      @renderEdge(material, offset)
+      offset += material.face_vert_count
 
     @gl.disable(@gl.CULL_FACE)
 
@@ -473,17 +484,12 @@ class this.MMD
     @shadowMap.computeMatrices()
     @shadowMap.beforeRender()
 
+    offset = 0
     for material in model.materials
       continue if 0.979 < material.alpha < 0.981 # alpha is 0.98
-      if @model.boneMotions
-        @reindexBones(model, material.bones)
-        @gl.uniform1i(@program.uBoneMotion, true)
 
-      sectionLength = material.endIndex - material.startIndex
-      offset = material.startIndex * 2 # *2 because it's byte offset
-      @gl.drawElements(@gl.TRIANGLES, sectionLength, @gl.UNSIGNED_SHORT, offset)
-
-      @gl.uniform1i(@program.uBoneMotion, false)
+      @gl.drawElements(@gl.TRIANGLES, material.face_vert_count, @gl.UNSIGNED_SHORT, offset * 2)
+      offset += material.face_vert_count
 
     @shadowMap.afterRender()
 
@@ -513,7 +519,7 @@ class this.MMD
     @gl.uniform3fv(@program.uLightColor, @lightColor)
     return
 
-  renderMaterial: (material) ->
+  renderMaterial: (material, offset) ->
     @gl.uniform3fv(@program.uAmbientColor, material.ambient)
     @gl.uniform3fv(@program.uSpecularColor, material.specular)
     @gl.uniform3fv(@program.uDiffuseColor, material.diffuse)
@@ -544,29 +550,26 @@ class this.MMD
 
     @gl.cullFace(@gl.BACK)
 
-    sectionLength = material.endIndex - material.startIndex
-    offset = material.startIndex * 2 # *2 because it's byte offset
-    @gl.drawElements(@gl.TRIANGLES, sectionLength, @gl.UNSIGNED_SHORT, offset)
+    @gl.drawElements(@gl.TRIANGLES, material.face_vert_count, @gl.UNSIGNED_SHORT, offset * 2)
 
     return
 
-  renderEdge: (material) ->
+  renderEdge: (material, offset) ->
     return if not @drawEdge or not material.edge_flag
 
     @gl.uniform1i(@program.uEdge, true)
     @gl.cullFace(@gl.FRONT)
 
-    sectionLength = material.endIndex - material.startIndex
-    offset = material.startIndex * 2 # *2 because it's byte offset
-    @gl.drawElements(@gl.TRIANGLES, sectionLength, @gl.UNSIGNED_SHORT, offset)
+    @gl.drawElements(@gl.TRIANGLES, material.face_vert_count, @gl.UNSIGNED_SHORT, offset * 2)
 
     @gl.cullFace(@gl.BACK)
     @gl.uniform1i(@program.uEdge, false)
 
   renderAxes: ->
+
     axisBuffer = @gl.createBuffer()
     @gl.bindBuffer(@gl.ARRAY_BUFFER, axisBuffer)
-    @gl.vertexAttribPointer(@program.aVertexPosition, 3, @gl.FLOAT, false, 0, 0)
+    @gl.vertexAttribPointer(@program.aMultiPurposeVector, 3, @gl.FLOAT, false, 0, 0)
     if @drawAxes
       @gl.uniform1i(@program.uAxis, true)
 
@@ -601,13 +604,12 @@ class this.MMD
     # draw center point
     if @drawCenterPoint
       @gl.uniform1i(@program.uCenterPoint, true)
-      @gl.bufferData(@gl.ARRAY_BUFFER, new Float32Array(this.center), @gl.STATIC_DRAW)
+      @gl.bufferData(@gl.ARRAY_BUFFER, new Float32Array(@center), @gl.STATIC_DRAW)
       @gl.drawArrays(@gl.POINTS, 0, 1)
       @gl.uniform1i(@program.uCenterPoint, false)
 
     @gl.deleteBuffer(axisBuffer)
     @gl.bindBuffer(@gl.ARRAY_BUFFER, null)
-
     return
 
   registerKeyListener: (element) ->

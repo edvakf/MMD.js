@@ -6,17 +6,19 @@ MMD.VertexShaderSource = '''
 
   uniform mat4 uLightMatrix; // mvpdMatrix of light space (model -> display space)
 
-  attribute vec3 aVertexPosition;
   attribute vec3 aVertexNormal;
   attribute vec2 aTextureCoord;
   attribute float aVertexEdge; // 0 or 1. 1 if the vertex has an edge. (becuase we can't pass bool to attributes)
 
-  uniform bool uBoneMotion;
-  uniform vec3 uBonePosOriginal[64];
-  uniform vec3 uBonePosMoved[64];
-  uniform vec4 uBoneRotations[64]; // quaternion
+  attribute float aBoneWeight;
+  attribute vec3 aVectorFromBone1;
+  attribute vec3 aVectorFromBone2;
+  attribute vec4 aBone1Rotation;
+  attribute vec4 aBone2Rotation;
+  attribute vec3 aBone1Position;
+  attribute vec3 aBone2Position;
 
-  attribute vec3 aBoneInfo; // boneWeight, bone1Index, bone2Index
+  attribute vec3 aMultiPurposeVector;
 
   varying vec3 vPosition;
   varying vec3 vNormal;
@@ -38,36 +40,27 @@ MMD.VertexShaderSource = '''
   }
 
   void main() {
-    vec3 position = aVertexPosition;
-    vec3 normal = aVertexNormal;
+    vec3 position;
+    vec3 normal;
 
-    if (uBoneMotion) {
-      float weight = aBoneInfo.x;
+    if (uAxis || uCenterPoint) {
 
-      int b1 = int(aBoneInfo.y);
-      vec3 o1 = uBonePosOriginal[b1];
-      vec3 p1 = uBonePosMoved[b1];
-      vec4 q1 = uBoneRotations[b1];
-      vec3 r1 = qtransform(q1, position - o1) + p1;
-      vec3 n1 = qtransform(q1, normal);
+      position = aMultiPurposeVector;
 
-      if (weight > 0.99) {
+    } else {
 
-        position = r1;
-        normal = n1;
+      float weight = aBoneWeight;
+      vec3 morph = aMultiPurposeVector;
 
-      } else {
+      position = qtransform(aBone1Rotation, aVectorFromBone1 + morph) + aBone1Position;
+      normal = qtransform(aBone1Rotation, aVertexNormal);
 
-        int b2 = int(aBoneInfo.z);
-        vec3 o2 = uBonePosOriginal[b2];
-        vec3 p2 = uBonePosMoved[b2];
-        vec4 q2 = uBoneRotations[b2];
-        vec3 r2 = qtransform(q2, position - o2) + p2;
-        vec3 n2 = qtransform(q2, normal);
+      if (weight < 0.99) {
+        vec3 p2 = qtransform(aBone2Rotation, aVectorFromBone2 + morph) + aBone2Position;
+        vec3 n2 = qtransform(aBone2Rotation, normal);
 
-        position = mix(r2, r1, weight);
-        normal = normalize(mix(n2, n1, weight));
-
+        position = mix(p2, position, weight);
+        normal = normalize(mix(n2, normal, weight));
       }
     }
 
