@@ -68,7 +68,8 @@ vec3.rotateByQuat4 = function(vec, quat, dest) {
   if (dest[0] === 0 && dest[1] === 0 && dest[2] === 0) return dest;
   quat4.multiplyVec3(quat, vec, dest);
   return vec3.set(dest, quat4.multiply(
-    [dest[0], dest[1], dest[2], 0], quat4.createInverse(quat)));
+    [dest[0], dest[1], dest[2], 0],
+    [-quat[0], -quat[1], -quat[2], quat[3]]));
 };
 
 quat4.createMultiply = function(quat, quat2) {
