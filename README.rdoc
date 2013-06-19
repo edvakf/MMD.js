@@ -30,7 +30,6 @@ Likely NOT to come
 == Dependence
 
 - glMatrix.js <https://github.com/toji/gl-matrix>
-- DataView.js <https://github.com/davidflanagan/DataView.js> (only for compatibility browsers that hasn't implemented DataView)
 
 == License
 
