@@ -27,6 +27,12 @@ Likely NOT to come
 
 - Editing motions
 
+== Build
+
+```
+coffee --join MMD.js --compile src/MMD.coffee src/MMD.*.coffee
+```
+
 == Dependence
 
 - glMatrix.js <https://github.com/toji/gl-matrix>
