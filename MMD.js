@@ -767,6 +767,13 @@
             _this.center[1] -= _this.distance / _this.DIST;
             vec3.multiplyMat4(_this.center, mat4.createInverse(_this.mvMatrix));
             break;
+          case 32:
+            if (_this.playing) {
+              _this.pause();
+            } else {
+              _this.play();
+            }
+            break;
           default:
             return;
         }

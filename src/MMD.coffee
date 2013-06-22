@@ -659,6 +659,11 @@ class this.MMD
           vec3.multiplyMat4(@center, @mvMatrix)
           @center[1] -= @distance / @DIST
           vec3.multiplyMat4(@center, mat4.createInverse(@mvMatrix))
+        when 32 # space
+          if @playing
+            @pause()
+          else
+            @play()
         else return
 
       e.preventDefault()
