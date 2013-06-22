@@ -426,7 +426,6 @@
         _results = [];
         for (_j = 0, _len1 = _ref2.length; _j < _len1; _j++) {
           ik = _ref2[_j];
-          maxangle = ik.control_weight * 4;
           ikbonePos = getBoneMotion(ik.bone_index).p;
           targetIndex = ik.target_bone_index;
           minLength = 0.1 * vec3.length(vec3.subtract(originalBonePositions[targetIndex], originalBonePositions[parentBones[targetIndex]], axis));
@@ -465,6 +464,7 @@
                   if (sinTheta < 0.001) {
                     continue;
                   }
+                  maxangle = (i + 1) * ik.control_weight * 4;
                   theta = Math.asin(sinTheta);
                   if (vec3.dot(targetVec, ikboneVec) < 0) {
                     theta = 3.141592653589793 - theta;

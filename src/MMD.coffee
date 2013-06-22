@@ -331,8 +331,6 @@ class this.MMD
       tmpR = quat4.create()
 
       for ik in model.iks
-        maxangle = ik.control_weight * 4 # angle to move in one iteration
-
         ikbonePos = getBoneMotion(ik.bone_index).p
         targetIndex = ik.target_bone_index
         minLength = 0.1 * vec3.length(
@@ -359,6 +357,7 @@ class this.MMD
             axisLen = vec3.length(axis)
             sinTheta = axisLen / ikboneVecLen / targetVecLen
             continue if sinTheta < 0.001 # ~0.05 degree
+            maxangle = (i + 1) * ik.control_weight * 4 # angle to move in one iteration
             theta = Math.asin(sinTheta)
             theta = 3.141592653589793 - theta if vec3.dot(targetVec, ikboneVec) < 0
             theta = maxangle if theta > maxangle
