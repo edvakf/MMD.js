@@ -201,6 +201,7 @@ class this.MMD
     return if not @playing or @textureManager.pendingCount > 0
     if ++@frame > @motionManager.lastFrame
       @pause()
+      @frame = -1
       return
 
     @moveCamera()

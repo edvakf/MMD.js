@@ -278,6 +278,7 @@
       }
       if (++this.frame > this.motionManager.lastFrame) {
         this.pause();
+        this.frame = -1;
         return;
       }
       this.moveCamera();
