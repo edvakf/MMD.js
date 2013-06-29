@@ -190,6 +190,7 @@ class this.MMD.Model # export to top level
 
   getEnglishMorphNames: (buffer, view, offset) ->
     length = @morphs.length - 1
+    length = 0 if length < 0
     block = new Uint8Array(buffer, offset, 20 * length)
     @english_morph_names =
       for i in [0...length]

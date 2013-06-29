@@ -1187,6 +1187,9 @@
     Model.prototype.getEnglishMorphNames = function(buffer, view, offset) {
       var block, i, length;
       length = this.morphs.length - 1;
+      if (length < 0) {
+        length = 0;
+      }
       block = new Uint8Array(buffer, offset, 20 * length);
       this.english_morph_names = (function() {
         var _i, _results;
